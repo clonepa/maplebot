@@ -185,8 +185,16 @@ async def on_message(message):
         conn = sqlite3.connect('maple.db')
         c = conn.cursor()
         if card_set in cardobj:
-            for card in cardobj[card_set]['cards']:               
-                c.execute("INSERT OR IGNORE INTO cards VALUES(?, ?, ?, ?, ?)", (card['multiverseid'], card['name'], card_set, card['type'], card['rarity']) )
+            for card in cardobj[card_set]['cards']:
+                # if multiverseID doesn't exist, generate fallback negative multiverse ID using set and name
+                if 'multiverseid' in card:
+                    mvid = card['multiverseid']
+                else:
+                    random.seed((card['name'], card_set))
+                    mvid = -math.floor(random.random() * 10000000)
+                    print('IDless card {0} assigned fallback ID {1}'.format(card['name'], mvid))
+
+                c.execute("INSERT OR IGNORE INTO cards VALUES(?, ?, ?, ?, ?)", (mvid, card['name'], card_set, card['type'], card['rarity']) )
                 count += 1
             conn.commit()
             await client.send_message(message.channel, 'added ' + str(count) + ' cards from set ' + card_set)
@@ -195,7 +203,7 @@ async def on_message(message):
         conn.close()
 
     if message.content.startswith('!mapletest'):
-        await client.send_message(message.channel, 'I am maple-bot and my guts are made of python 3.6')
+        await client.send_message(message.channel, 'i\'m maple-bot and my guts are made of python 3.6, brah')
 
     if message.content.startswith('!adjustbux'):
         p1 = message.content.split(' ')[1]
@@ -250,23 +258,22 @@ async def on_message(message):
         conn = sqlite3.connect('maple.db')
         c = conn.cursor()
         c.execute('''CREATE TABLE IF NOT EXISTS users
-                     (discord_id text, name text, elo_rating integer, cash real)''')
+                     (discord_id TEXT, name TEXT, elo_rating INTEGER, cash REAL)''')
         conn.commit()
         c.execute('''CREATE TABLE IF NOT EXISTS match_history
-                     (p1 text, p2 text, p1_old_rating integer, p2_old_rating, p1_new_rating integer, p2_new_rating integer, p1_deckhash text, p2_deckash text)''')
-        conn.commit()
-        c.execute('''CREATE TABLE IF NOT EXISTS collection
-                     (owner_id text, multiverse_id integer, card_name text, card_set text, amount_owned integer)''')    
+                     (winner TEXT, loser TEXT, winner_deckhash TEXT, loser_deckhash TEXT, FOREIGN KEY(winner) REFERENCES users(discord_id), FOREIGN KEY(loser) REFERENCES users(discord_id))''')
         conn.commit()
         c.execute('''CREATE TABLE IF NOT EXISTS cards
-                     (multiverse_id integer, card_name text, card_set text, card_type text, rarity text, primary key (multiverse_id, card_name, card_set))''')    
+                     (multiverse_id INTEGER, card_name TEXT, card_set TEXT, card_type TEXT, rarity TEXT, PRIMARY KEY (multiverse_id, card_name, card_set))''')    
+        conn.commit()
+        c.execute('''CREATE TABLE IF NOT EXISTS collection
+                     (owner_id TEXT, multiverse_id INTEGER, amount_owned INTEGER, FOREIGN KEY(owner_id) REFERENCES users(discord_id), FOREIGN KEY(multiverse_id) REFERENCES cards(multiverse_id))''')    
         conn.commit()
         c.execute('''CREATE TABLE IF NOT EXISTS booster_inventory
-                     (owner_id text, card_set text, seed real)''')
+                     (owner_id TEXT, card_set TEXT, seed REAL, FOREIGN KEY(owner_id) REFERENCES users(discord_id), FOREIGN KEY(card_set) REFERENCES set_map(code))''')
         conn.commit()
-        #TODO: populate this table
         c.execute('''CREATE TABLE IF NOT EXISTS set_map
-                     (name text, code text, alt_code text, primary key (code, alt_code))''')
+                     (name TEXT, code TEXT, alt_code TEXT, PRIMARY KEY (code, alt_code))''')
         conn.commit()
         conn.close()
 
