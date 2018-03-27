@@ -110,6 +110,13 @@ def give_booster(owner, card_set):
         conn.commit()
         conn.close()   
 
+def adjustbux (who, how_much):
+    conn = sqlite3.connect('maple.db')
+    c = conn.cursor()
+    c.execute("UPDATE users SET cash = cash + " + how_much + " WHERE discord_id='" + who + "' OR name='" + who + "'")
+    conn.commit()
+    conn.close()
+
 @client.event
 async def on_ready():
     print('Logged in as')
@@ -200,12 +207,9 @@ async def on_message(message):
     if message.content.startswith('!adjustbux'):
         p1 = message.content.split(' ')[1]
         p2 = message.content.split(' ')[2]
-        conn = sqlite3.connect('maple.db')
-        c = conn.cursor()
-        c.execute("UPDATE users SET cash = cash + " + p2 + " WHERE discord_id='" + p1 + "' OR name='" + p1 + "'")
-        conn.commit()
+        adjustbux(p1, p2)
         await client.send_message(message.channel, "updated bux")
-        conn.close()
+        
 
     if message.content.startswith('!populatesetinfo'):
         with open ('AllSets.json', encoding="utf8") as f:
