@@ -162,6 +162,32 @@ def adjustbux (who, how_much):
     conn.commit()
     conn.close()
 
+def open_booster(owner, set):
+    conn = sqlite3.connect('maple.db')
+    c = conn.cursor()
+    c.execute("SELECT *, rowid FROM booster_inventory WHERE owner_id=:name AND card_set LIKE :set", {"name": owner, "set": set})
+    mybooster = c.fetchone()
+    if mybooster == None:
+        return None
+    generated_booster = gen_booster(mybooster[1], mybooster[2])
+    rid = mybooster[3]
+    outstring = ""
+    for card in generated_booster:
+        c.execute("SELECT * FROM collection WHERE owner_id=:name AND multiverse_id=:mvid AND amount_owned > 0", {"name": owner, "mvid": card[0], "cname": card[1], "cset": card[2] })
+        cr = c.fetchone()
+        if not cr:
+            c.execute("INSERT INTO collection VALUES (:name,:mvid,1)", {"name": owner, "mvid": card[0]})
+        else:
+            c.execute("UPDATE collection SET amount_owned = amount_owned + 1 WHERE owner_id=:name AND multiverse_id=:mvid", {"name": owner, "mvid": card[0]})
+        
+        outstring += card[1] + " -- " + card[4] + "\n"
+    if outstring == "":
+        outstring = "It was empty... !"
+    c.execute("DELETE FROM booster_inventory WHERE rowid=:rowid", {"rowid": int(rid)}) 
+    conn.commit()
+    conn.close()
+    return outstring
+
 @client.event
 async def on_ready():
     print('Logged in as')
@@ -192,31 +218,12 @@ async def on_message(message):
 
     if message.content.startswith('!openbooster'):
         card_set = message.content.split(' ')[1].upper()
-        conn = sqlite3.connect('maple.db')
-        c = conn.cursor()
-        c.execute("SELECT *, rowid FROM booster_inventory WHERE owner_id=:name AND card_set LIKE :cset", {"name": str(message.author.id), "cset": card_set})
-        mybooster = c.fetchone()
-        if mybooster == None:
+        opener = str(message.author.id)
+        outstring = open_booster(opener, card_set)
+        if outstring:
+            await client.send_message(message.channel, "```" + outstring + "```" )
+        else:
             await client.send_message(message.channel, "don't have any of those homie!!" )
-            return
-        generated_booster = gen_booster(mybooster[1], mybooster[2])
-        rid = mybooster[3]
-        outstring = ""
-        for card in generated_booster:
-            c.execute("SELECT * FROM collection WHERE owner_id=:name AND multiverse_id=:mvid AND amount_owned > 0", {"name": str(message.author.id), "mvid": card[0], "cname": card[1], "cset": card[2] })
-            cr = c.fetchone()
-            if not cr:
-                c.execute("INSERT INTO collection VALUES (:name,:mvid,1)", {"name": str(message.author.id), "mvid": card[0]})
-            else:
-                c.execute("UPDATE collection SET amount_owned = amount_owned + 1 WHERE owner_id=:name AND multiverse_id=:mvid", {"name": str(message.author.id), "mvid": card[0]})
-            
-            outstring += card[1] + " -- " + card[4] + "\n"
-        if outstring == "":
-            outstring = "It was empty... !"
-        await client.send_message(message.channel, "```" + outstring + "```" )
-        c.execute("DELETE FROM booster_inventory WHERE rowid=:rowid", {"rowid": int(rid)}) 
-        conn.commit()
-        conn.close()
 
     if message.content.startswith("!maplecard"):
         cname = message.content[len("!maplecard "):]
