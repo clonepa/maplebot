@@ -139,7 +139,7 @@ def give_booster(owner, card_set):
         cardobj = load_mtgjson()
         if not (card_set in cardobj):
             outmessage = "I don't know where to find that kind of booster..."
-            return out_message
+            return outmessage
         elif not ('booster' in cardobj[card_set]):
             outmessage = "I've heard of that set but I've never seen a booster for it, I'll see what I can do..."
         conn = sqlite3.connect('maple.db')
