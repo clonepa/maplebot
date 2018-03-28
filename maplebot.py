@@ -108,7 +108,12 @@ def gen_booster(card_set, seed=0):
             if isinstance(i, str):
                 mybooster += [i]
             elif isinstance(i, list):
-                mybooster += [random.choice(i)]
+                if set(i) == {"rare", "mythic rare"}:
+                    mybooster += [random.choice(["rare"] * 875 + ["mythic rare"] * 125)]
+                elif set(i) == {"foil", "power nine"}:
+                    mybooster += [random.choice((["mythic rare"] + ["rare"] * 4 + ["uncommon"] * 6 + ["common"] * 9) * 98 + ["power nine"] * 2)]
+                else:
+                    mybooster += [random.choice(i)]
         gbooster = []
         conn = sqlite3.connect('maple.db')
         c = conn.cursor()
@@ -142,8 +147,6 @@ def give_booster(owner, card_set):
             return outmessage
         elif not ('booster' in cardobj[card_set]):
             outmessage = "I've heard of that set but I've never seen a booster for it, I'll see what I can do..."
-        conn = sqlite3.connect('maple.db')
-        c = conn.cursor()
         c.execute("SELECT discord_id FROM users WHERE name LIKE :name OR discord_id LIKE :name", {"name": owner})
         owner = c.fetchone()[0]
         random.seed()
