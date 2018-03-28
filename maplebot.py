@@ -153,12 +153,12 @@ async def on_message(message):
         rid = mybooster[3]
         outstring = ""
         for card in generated_booster:
-            c.execute("SELECT * FROM collection WHERE owner_id=:name AND multiverse_id=:mvid AND card_name LIKE :cname AND card_set LIKE :cset AND amount_owned > 0", {"name": str(message.author.id), "mvid": card[0], "cname": card[1], "cset": card[2] })
+            c.execute("SELECT * FROM collection WHERE owner_id=:name AND multiverse_id=:mvid AND amount_owned > 0", {"name": str(message.author.id), "mvid": card[0], "cname": card[1], "cset": card[2] })
             cr = c.fetchone()
             if not cr:
-                c.execute("INSERT INTO collection VALUES (:name,:mvid,:cname,:cset,1)", {"name": str(message.author.id), "mvid": card[0], "cname": card[1], "cset": card[2] })
+                c.execute("INSERT INTO collection VALUES (:name,:mvid,1)", {"name": str(message.author.id), "mvid": card[0]})
             else:
-                c.execute("UPDATE collection SET amount_owned = amount_owned + 1 WHERE owner_id=:name AND multiverse_id=:mvid AND card_name LIKE :cname AND card_set LIKE :cset", {"name": str(message.author.id), "mvid": card[0], "cname": card[1], "cset": card[2] })
+                c.execute("UPDATE collection SET amount_owned = amount_owned + 1 WHERE owner_id=:name AND multiverse_id=:mvid", {"name": str(message.author.id), "mvid": card[0]})
             
             outstring += card[1] + " -- " + card[4] + "\n"
         await client.send_message(message.channel, "```" + outstring + "```" )
