@@ -197,10 +197,10 @@ async def on_message(message):
                 if 'multiverseid' in card:
                     mvid = card['multiverseid']
                 else:
-                    random.seed((card['name'], card_set))
-                    mvid = -math.floor(random.random() * 10000000)
+                    random.seed(card['name'] + card_set)
+                    mvid = -random.randrange(100000000)
                     print('IDless card {0} assigned fallback ID {1}'.format(card['name'], mvid))
-
+            
                 c.execute("INSERT OR IGNORE INTO cards VALUES(?, ?, ?, ?, ?)", (mvid, card['name'], card_set, card['type'], card['rarity']) )
                 count += 1
             conn.commit()
@@ -268,7 +268,7 @@ async def on_message(message):
                      (winner TEXT, loser TEXT, winner_deckhash TEXT, loser_deckhash TEXT, FOREIGN KEY(winner) REFERENCES users(discord_id), FOREIGN KEY(loser) REFERENCES users(discord_id))''')
         conn.commit()
         c.execute('''CREATE TABLE IF NOT EXISTS cards
-                     (multiverse_id INTEGER, card_name TEXT, card_set TEXT, card_type TEXT, rarity TEXT, PRIMARY KEY (multiverse_id, card_name, card_set))''')    
+                     (multiverse_id INTEGER PRIMARY KEY, card_name TEXT, card_set TEXT, card_type TEXT, rarity TEXT)''')    
         conn.commit()
         c.execute('''CREATE TABLE IF NOT EXISTS collection
                      (owner_id TEXT, multiverse_id INTEGER, amount_owned INTEGER, FOREIGN KEY(owner_id) REFERENCES users(discord_id), FOREIGN KEY(multiverse_id) REFERENCES cards(multiverse_id))''')    
