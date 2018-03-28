@@ -119,7 +119,7 @@ def gen_booster(card_set, seed=0):
                 gbooster += [r]        
         conn.close()
         return gbooster
-    
+
 def give_booster(owner, card_set):
         outmessage =""
         card_set = card_set.upper() #just in case
@@ -164,7 +164,7 @@ async def on_message(message):
         seed = float(message.content.split(' ')[2])
         await client.send_message(message.channel, "```" + str(gen_booster(card_set,seed)) + "```" )
 
-    if message.content.startswith('!packprice'): #!packprice [setcode] returns mtgo booster pack price for the set via mtggoldfish
+    elif message.content.startswith('!packprice'): #!packprice [setcode] returns mtgo booster pack price for the set via mtggoldfish
         card_set = message.content.split(' ')[1].upper()
         setname = get_set_info(card_set)['name']
 
@@ -178,7 +178,7 @@ async def on_message(message):
 
         await client.send_message(message.channel, out)
 
-    if message.content.startswith('!openbooster'):
+    elif message.content.startswith('!openbooster'):
         card_set = message.content.split(' ')[1].upper()
         conn = sqlite3.connect('maple.db')
         c = conn.cursor()
@@ -204,12 +204,12 @@ async def on_message(message):
         conn.commit()
         conn.close()
 
-    if message.content.startswith("!maplecard"):
+    elif message.content.startswith("!maplecard"):
         cname = message.content[len("!maplecard "):]
         cname = cname.replace(" ","%20")
         await client.send_message(message.channel, "https://api.scryfall.com/cards/named?fuzzy=!" + cname + "!&format=image")
     
-    if message.content.startswith('!givebooster'):
+    elif message.content.startswith('!givebooster'):
         card_set = message.content.split(' ')[1].upper()
         if len(message.content.split(' ')) > 2 :
             person_getting_booster = message.content.split(' ')[2]
@@ -223,7 +223,7 @@ async def on_message(message):
             result = give_booster(person_getting_booster, card_set)
         await client.send_message(message.channel, result )
         
-    if message.content.startswith('!loadsetjson'):
+    elif message.content.startswith('!loadsetjson'):
         card_set = message.content.split(' ')[1].upper()
         count = 0
         with open ('AllSets.json', encoding="utf8") as f:
@@ -248,17 +248,17 @@ async def on_message(message):
             await client.send_message(message.channel, 'set code ' + card_set + ' not found')
         conn.close()
 
-    if message.content.startswith('!mapletest'):
+    elif message.content.startswith('!mapletest'):
         await client.send_message(message.channel, 'i\'m maple-bot and my guts are made of python 3.6, brah')
 
-    if message.content.startswith('!adjustbux'):
+    elif message.content.startswith('!adjustbux'):
         p1 = message.content.split(' ')[1]
         p2 = message.content.split(' ')[2]
         adjustbux(p1, p2)
         await client.send_message(message.channel, "updated bux")
         
 
-    if message.content.startswith('!populatesetinfo'):
+    elif message.content.startswith('!populatesetinfo'):
         with open ('AllSets.json', encoding="utf8") as f:
             cardobj = json.load(f)
         conn = sqlite3.connect('maple.db')
@@ -278,7 +278,7 @@ async def on_message(message):
                 c.execute("INSERT OR IGNORE INTO set_map VALUES (?, ?, ?)", (name, code, alt_code))
         conn.commit()
         conn.close()
-    if message.content.startswith('!recordmatch'):
+    elif message.content.startswith('!recordmatch'):
         p1 = message.content.split(' ')[1]
         p2 = message.content.split(' ')[2]
         conn = sqlite3.connect('maple.db')
@@ -297,7 +297,7 @@ async def on_message(message):
         
         conn.close()
         
-    if message.content.startswith('!setupdb'):
+    elif message.content.startswith('!setupdb'):
         conn = sqlite3.connect('maple.db')
         c = conn.cursor()
         c.execute('''CREATE TABLE IF NOT EXISTS users
@@ -324,7 +324,7 @@ async def on_message(message):
         conn.close()
 
     
-    if message.content.startswith('!gutdump'):
+    elif message.content.startswith('!gutdump'):
         table = message.content.split(' ')[1]
         if table == None:
             table = "users"
@@ -350,12 +350,12 @@ async def on_message(message):
             await client.send_message(message.channel,"```" + str(names) + "\n\n" + outstring + "\n```")
         conn.close()
         
-    if message.content.startswith('!hash'):
+    elif message.content.startswith('!hash'):
         thing_to_hash = message.content[len("!hash "):]
         hashed_thing = deckhash.make_deck_hash(*deckhash.convert_deck_to_boards(thing_to_hash))
         await client.send_message(message.channel, 'hashed deck: ' + hashed_thing)
         
-    if message.content.startswith('!register'):
+    elif message.content.startswith('!register'):
         nickname = message.content.split(' ')[1]
         conn = sqlite3.connect('maple.db')
         c = conn.cursor()
@@ -374,7 +374,7 @@ async def on_message(message):
             await client.send_message(message.channel, outstring)
         conn.close()
     
-    if message.content.startswith('!changenick'):
+    elif message.content.startswith('!changenick'):
         nickname = message.content.split(' ')[1]
         if (not verify_nick(nickname)):
             await client.send_message(message.channel, 'user with nickname ' + nickname + ' already exists. don\'t try to confuse old maple you hear!!')
@@ -386,7 +386,7 @@ async def on_message(message):
             await client.send_message(message.channel, message.author.mention + " updated nickname")
             conn.close()
             
-    if message.content.startswith('!userinfo'):
+    elif message.content.startswith('!userinfo'):
         conn = sqlite3.connect('maple.db')
         c = conn.cursor()
         c.execute("SELECT * FROM users WHERE discord_id='" + message.author.id + "'")
@@ -395,7 +395,7 @@ async def on_message(message):
         await client.send_message(message.channel, outstring)
         conn.close()
         
-    if message.content.startswith('!query'):
+    elif message.content.startswith('!query'):
         query = message.content[len("!query "):]
         conn = sqlite3.connect('maple.db')
         c = conn.cursor()
@@ -419,10 +419,10 @@ async def on_message(message):
         conn.commit()
         conn.close()
         
-    if message.content.startswith('!elotest'):
+    elif message.content.startswith('!elotest'):
         w = int(message.content.split(' ')[1])
         l = int(message.content.split(' ')[2])
         new_r = calc_elo_change(w,l)
         await client.send_message(message.channel, "```old winner rating: " + str(w) + "\nold loser rating: " + str(l) + "\n\nnew winner rating: " + str(new_r[0])  + "\nnew loser rating: " + str(new_r[1]) + "```")
-        
+      
 client.run(token)
