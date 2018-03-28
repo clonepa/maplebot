@@ -13,21 +13,16 @@ import re
 client = discord.Client()
 token = mapletoken.get_token()
 
-def get_booster_price(setcode, altsetcode=None):
-    goldfish_html = requests.get('https://www.mtggoldfish.com/prices/online/boosters').text
+def get_booster_price(setname):
+    goldfish_html = requests.get('https://www.mtggoldfish.com/prices/online/boosters').text #todo: cache this
     
-    regex = r"<div class='priceList-set'>\n<h3 class='priceList-set-header'>\n<a class=\"priceList-set-header-link\" href=\"\/index\/{setcode}\">[\s\S]*?href=\"/index/{setcode}\">(.*)</a>[\s\S]*?<div class='priceList-price-price-wrapper'>\n([\d.]+)[\s\S]*?<\/div>".format(setcode=setcode.upper())
+    #this is hideous
+    regex = r"<a class=\"priceList-set-header-link\" href=\"\/index\/\w+\"><img class=\"[\w\- ]+\" alt=\"\w+\" src=\"[\w.\-\/]+\" \/>\n<\/a><a class=\"priceList-set-header-link\" href=\"[\w\/]+\">{setname}<\/a>[\s\S]*?<div class='priceList-price-price-wrapper'>\n([\d.]+)[\s\S]*?<\/div>".format(setname=setname)
 
-    print(setcode)
     div_match = re.search(regex, goldfish_html)
     if (div_match):
-        set_name = div_match.group(1)
-        price = div_match.group(2)
-        return set_name + " booster pack price: $" + price
-    elif altsetcode != None:
-        return get_booster_price(altsetcode)
-    else:
-        return "no prices found for that set brah"
+        return div_match.group(1)
+    return None
 
 def verify_nick(nick):
     conn = sqlite3.connect('maple.db')
@@ -131,15 +126,20 @@ async def on_message(message):
         seed = float(message.content.split(' ')[2])
         await client.send_message(message.channel, "```" + str(gen_booster(card_set,seed)) + "```" )
 
-    if message.content.startswith('!packprice'):
+    if message.content.startswith('!packprice'): #!packprice [setcode] returns mtgo booster pack price for the set via mtggoldfish
         card_set = message.content.split(' ')[1].upper()
-        set_info = get_set_info(card_set)
-        if set_info:
-            out = get_booster_price(set_info['altcode'], card_set)
+        setname = get_set_info(card_set)['name']
+
+        await client.send_typing(message.channel)
+
+        price = get_booster_price(setname)
+        if price:
+            out = "{0} booster pack price: ${1}".format(setname, price)
         else:
-            out = get_booster_price(card_set)
+            out = "no prices found for that set brah"
 
         await client.send_message(message.channel, out)
+
     if message.content.startswith('!openbooster'):
         card_set = message.content.split(' ')[1].upper()
         conn = sqlite3.connect('maple.db')
