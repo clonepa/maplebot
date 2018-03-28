@@ -139,14 +139,23 @@ def gen_booster(card_set, seed=0):
         return gbooster
     
 def give_booster(owner, card_set):
-        outmessage =""
+        conn = sqlite3.connect('maple.db')
+        c = conn.cursor()
+
+        outmessage = ""
         card_set = card_set.upper() #just in case
         cardobj = load_mtgjson()
+        c.execute("SELECT card_set FROM cards WHERE card_set LIKE :cardset", {"cardset": card_set})
+
         if not (card_set in cardobj):
             outmessage = "I don't know where to find that kind of booster..."
             return outmessage
+        elif not c.fetchone():
+            outmessage = "that set's not in my brain!!"
+            return outmessage
         elif not ('booster' in cardobj[card_set]):
             outmessage = "I've heard of that set but I've never seen a booster for it, I'll see what I can do..."
+        
         c.execute("SELECT discord_id FROM users WHERE name LIKE :name OR discord_id LIKE :name", {"name": owner})
         owner = c.fetchone()[0]
         random.seed()
