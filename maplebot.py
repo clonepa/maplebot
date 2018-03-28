@@ -108,7 +108,12 @@ def gen_booster(card_set, seed=0):
             if isinstance(i, str):
                 mybooster += [i]
             elif isinstance(i, list):
-                mybooster += [random.choice(i)]
+                if set(i) == {"rare", "mythic rare"}:
+                    mybooster += [random.choice(["rare"] * 875 + ["mythic rare"] * 125)]
+                elif set(i) == {"foil", "power nine"}:
+                    mybooster += [random.choice((["mythic rare"] + ["rare"] * 4 + ["uncommon"] * 6 + ["common"] * 9) * 98 + ["power nine"] * 2)]
+                else:
+                    mybooster += [random.choice(i)]
         gbooster = []
         conn = sqlite3.connect('maple.db')
         c = conn.cursor()
@@ -134,16 +139,23 @@ def gen_booster(card_set, seed=0):
         return gbooster
     
 def give_booster(owner, card_set):
-        outmessage =""
+        conn = sqlite3.connect('maple.db')
+        c = conn.cursor()
+
+        outmessage = ""
         card_set = card_set.upper() #just in case
         cardobj = load_mtgjson()
+        c.execute("SELECT card_set FROM cards WHERE card_set LIKE :cardset", {"cardset": card_set})
+
         if not (card_set in cardobj):
             outmessage = "I don't know where to find that kind of booster..."
             return outmessage
+        elif not c.fetchone():
+            outmessage = "that set's not in my brain!!"
+            return outmessage
         elif not ('booster' in cardobj[card_set]):
             outmessage = "I've heard of that set but I've never seen a booster for it, I'll see what I can do..."
-        conn = sqlite3.connect('maple.db')
-        c = conn.cursor()
+        
         c.execute("SELECT discord_id FROM users WHERE name LIKE :name OR discord_id LIKE :name", {"name": owner})
         owner = c.fetchone()[0]
         random.seed()
