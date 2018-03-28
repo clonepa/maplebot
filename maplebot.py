@@ -104,15 +104,15 @@ def gen_booster(card_set, seed=0):
         
         for cd in mybooster:
             if cd in rarities:
-                c.execute("SELECT * FROM cards WHERE rarity like :rarity AND card_set=:cardset", {"rarity": cd, "cardset": card_set})
+                c.execute("SELECT * FROM cards WHERE rarity like :rarity AND card_set LIKE :cardset", {"rarity": cd, "cardset": card_set})
             elif cd == "land":
-                c.execute("SELECT * FROM cards WHERE rarity='Basic Land' AND card_set=:cardset", {"cardset": card_set})
+                c.execute("SELECT * FROM cards WHERE rarity='Basic Land' AND card_set LIKE :cardset", {"cardset": card_set})
             elif cd == "power nine":
-                c.execute("SELECT * FROM cards WHERE rarity='Special' AND card_set=:cardset", {"cardset": card_set})
+                c.execute("SELECT * FROM cards WHERE rarity='Special' AND card_set LIKE :cardset", {"cardset": card_set})
             elif cd in other_shit:
-                 c.execute("SELECT * FROM cards WHERE rarity like :rarity AND card_set=:cardset", {"rarity": "common", "cardset": card_set})
+                 c.execute("SELECT * FROM cards WHERE rarity like :rarity AND card_set LIKE :cardset", {"rarity": "common", "cardset": card_set})
             else:
-                c.execute("SELECT * FROM cards WHERE card_name=:name AND card_set=:cardset", {"name": cd, "cardset": card_set})
+                c.execute("SELECT * FROM cards WHERE card_name=:name AND card_set LIKE :cardset", {"name": cd, "cardset": card_set})
             r_all = c.fetchall()
             if r_all:
                 r = random.choice(r_all)
@@ -121,6 +121,15 @@ def gen_booster(card_set, seed=0):
         return gbooster
     
 def give_booster(owner, card_set):
+        outmessage =""
+        card_set = card_set.upper() #just in case
+        with open ('AllSets.json', encoding="utf8") as f:
+            cardobj = json.load(f)
+        if not (card_set in cardobj):
+            outmessage = "I don't know where to find that kind of booster..."
+            return out_message
+        elif not ('booster' in cardobj[card_set]):
+            outmessage = "I've heard of that set but I've never seen a booster for it, I'll see what I can do..."
         conn = sqlite3.connect('maple.db')
         c = conn.cursor()
         c.execute("SELECT discord_id FROM users WHERE name LIKE :name OR discord_id LIKE :name", {"name": owner})
@@ -129,7 +138,10 @@ def give_booster(owner, card_set):
         booster_seed = random.random()
         c.execute("INSERT INTO booster_inventory VALUES (:owner, :cset, :seed)", {"owner": owner, "cset": card_set, "seed": booster_seed})
         conn.commit()
-        conn.close()   
+        conn.close()
+        if outmessage == "":
+            outmessage = "booster added to inventory!"
+        return outmessage
 
 def adjustbux (who, how_much):
     conn = sqlite3.connect('maple.db')
@@ -208,8 +220,8 @@ async def on_message(message):
             person_getting_booster = str(message.author.id)
             
         for i in range(amount):
-            give_booster(person_getting_booster, card_set)
-        await client.send_message(message.channel, "booster added to inventory!" )
+            result = give_booster(person_getting_booster, card_set)
+        await client.send_message(message.channel, result )
         
     if message.content.startswith('!loadsetjson'):
         card_set = message.content.split(' ')[1].upper()
