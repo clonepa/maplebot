@@ -144,12 +144,13 @@ async def on_message(message):
         card_set = message.content.split(' ')[1].upper()
         conn = sqlite3.connect('maple.db')
         c = conn.cursor()
-        c.execute("SELECT * FROM booster_inventory WHERE owner_id=:name AND card_set LIKE :cset", {"name": str(message.author.id), "cset": card_set})
+        c.execute("SELECT *, rowid FROM booster_inventory WHERE owner_id=:name AND card_set LIKE :cset", {"name": str(message.author.id), "cset": card_set})
         mybooster = c.fetchone()
         if mybooster == None:
             await client.send_message(message.channel, "don't have any of those homie!!" )
             return
         generated_booster = gen_booster(mybooster[1], mybooster[2])
+        rid = mybooster[3]
         outstring = ""
         for card in generated_booster:
             c.execute("SELECT * FROM collection WHERE owner_id=:name AND multiverse_id=:mvid AND card_name LIKE :cname AND card_set LIKE :cset AND amount_owned > 0", {"name": str(message.author.id), "mvid": card[0], "cname": card[1], "cset": card[2] })
@@ -161,7 +162,7 @@ async def on_message(message):
             
             outstring += card[1] + " -- " + card[4] + "\n"
         await client.send_message(message.channel, "```" + outstring + "```" )
-        c.execute("DELETE FROM booster_inventory WHERE owner_id=:name AND card_set=:cset AND seed=:seed", {"name": mybooster[0], "cset": mybooster[1], "seed":mybooster[2]}) 
+        c.execute("DELETE FROM booster_inventory WHERE rowid=:rowid", {"rowid": int(rid)}) 
         conn.commit()
         conn.close()
 
