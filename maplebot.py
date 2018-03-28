@@ -200,6 +200,29 @@ def open_booster(owner, set):
     conn.close()
     return outstring
 
+def load_set_json(card_set):
+    count = 0
+    cardobj = load_mtgjson()
+
+    conn = sqlite3.connect('maple.db')
+    c = conn.cursor()
+    if card_set in cardobj:
+        for card in cardobj[card_set]['cards']:
+            # if multiverseID doesn't exist, generate fallback negative multiverse ID using set and name as seed
+            if 'multiverseid' in card:
+                mvid = card['multiverseid']
+            else:
+                random.seed(card['name'] + card_set)
+                mvid = -random.randrange(100000000)
+                print('IDless card {0} assigned fallback ID {1}'.format(card['name'], mvid))
+            c.execute("INSERT OR IGNORE INTO cards VALUES(?, ?, ?, ?, ?)", (mvid, card['name'], card_set, card['type'], card['rarity']) )
+            count += 1
+        conn.commit()
+        return count
+    else:
+        return -1
+    conn.close()
+
 @client.event
 async def on_ready():
     print('Logged in as')
@@ -258,27 +281,12 @@ async def on_message(message):
         
     if message.content.startswith('!loadsetjson'):
         card_set = message.content.split(' ')[1].upper()
-        count = 0
-        cardobj = load_mtgjson()
-        conn = sqlite3.connect('maple.db')
-        c = conn.cursor()
-        if card_set in cardobj:
-            for card in cardobj[card_set]['cards']:
-                # if multiverseID doesn't exist, generate fallback negative multiverse ID using set and name
-                if 'multiverseid' in card:
-                    mvid = card['multiverseid']
-                else:
-                    random.seed(card['name'] + card_set)
-                    mvid = -random.randrange(100000000)
-                    print('IDless card {0} assigned fallback ID {1}'.format(card['name'], mvid))
-            
-                c.execute("INSERT OR IGNORE INTO cards VALUES(?, ?, ?, ?, ?)", (mvid, card['name'], card_set, card['type'], card['rarity']) )
-                count += 1
-            conn.commit()
-            await client.send_message(message.channel, 'added ' + str(count) + ' cards from set ' + card_set)
+
+        result = load_set_json(card_set)
+        if result > -1:
+            await client.send_message(message.channel, 'added {0} cards from set {1}'.format(result, card_set))
         else:
-            await client.send_message(message.channel, 'set code ' + card_set + ' not found')
-        conn.close()
+            await client.send_message(message.channel, 'set code {0} not found'.format(card_set))
 
     if message.content.startswith('!mapletest'):
         await client.send_message(message.channel, 'i\'m maple-bot and my guts are made of python 3.6, brah')
