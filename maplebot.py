@@ -9,12 +9,34 @@ import random
 import json
 import requests
 import re
+import time
+import base64
 
 client = discord.Client()
 token = mapletoken.get_token()
 
 def get_booster_price(setname):
-    goldfish_html = requests.get('https://www.mtggoldfish.com/prices/online/boosters').text #todo: cache this
+    conn = sqlite3.connect('maple.db')
+    c = conn.cursor()
+    c.execute("SELECT * FROM timestamped_base64_strings WHERE name='mtggoldfish'")
+    r = c.fetchone()
+    if r:
+        if r[2] + 86400  < time.time(): #close enough to a day
+            goldfish_html = requests.get('https://www.mtggoldfish.com/prices/online/boosters').text
+            b64html = base64.b64encode(str.encode(goldfish_html))
+            c.execute("UPDATE timestamped_base64_strings SET b64str=:b64str, timestamp=:timestamp WHERE name='mtggoldfish'", {"b64str": b64html, "timestamp": time.time() })
+            print("mtggoldfish data stale, fetched new data")
+        else:
+            goldfish_html = base64.b64decode(r[1]).decode()
+            print("mtggoldfish data fresh!")
+    else:
+        goldfish_html = requests.get('https://www.mtggoldfish.com/prices/online/boosters').text
+        b64html = base64.b64encode(str.encode(goldfish_html))
+        c.execute("INSERT INTO timestamped_base64_strings values ('mtggoldfish', :b64str, :timestamp)", {"b64str": b64html, "timestamp": time.time() })
+        print("No mtggoldfish cache, created new record...")
+    
+    conn.commit()
+    conn.close()  
     
     #this is hideous
     regex = r"<a class=\"priceList-set-header-link\" href=\"\/index\/\w+\"><img class=\"[\w\- ]+\" alt=\"\w+\" src=\"[\w.\-\/]+\" \/>\n<\/a><a class=\"priceList-set-header-link\" href=\"[\w\/]+\">{setname}<\/a>[\s\S]*?<div class='priceList-price-price-wrapper'>\n([\d.]+)[\s\S]*?<\/div>".format(setname=setname)
@@ -29,7 +51,9 @@ def verify_nick(nick):
     c = conn.cursor()
     c.execute("SELECT * FROM users WHERE name='" + nick + "'")
     if c.fetchone():
+        conn.close()
         return False
+    conn.close()
     return True
 
 def calc_elo_change(winner, loser):
@@ -51,8 +75,10 @@ def get_set_info(set_code):
     c.execute("SELECT * FROM set_map WHERE code=:scode", {"scode":set_code})
     r = c.fetchone()
     if r:
+        conn.close()
         return {"name": r[0], "code": r[1], "altcode": r[2]}
     else:
+        conn.close()
         return None
     
 def gen_booster(card_set, seed=0):
@@ -279,6 +305,9 @@ async def on_message(message):
         conn.commit()
         c.execute('''CREATE TABLE IF NOT EXISTS set_map
                      (name TEXT, code TEXT, alt_code TEXT, PRIMARY KEY (code, alt_code))''')
+        conn.commit()
+        c.execute('''CREATE TABLE IF NOT EXISTS timestamped_base64_strings
+                     (name TEXT PRIMARY KEY, b64str TEXT, timestamp REAL)''')
         conn.commit()
         conn.close()
 
