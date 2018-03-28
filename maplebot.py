@@ -211,6 +211,8 @@ async def on_message(message):
                 c.execute("UPDATE collection SET amount_owned = amount_owned + 1 WHERE owner_id=:name AND multiverse_id=:mvid", {"name": str(message.author.id), "mvid": card[0]})
             
             outstring += card[1] + " -- " + card[4] + "\n"
+        if outstring == "":
+            outstring = "It was empty... !"
         await client.send_message(message.channel, "```" + outstring + "```" )
         c.execute("DELETE FROM booster_inventory WHERE rowid=:rowid", {"rowid": int(rid)}) 
         conn.commit()
