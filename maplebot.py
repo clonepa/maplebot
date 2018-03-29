@@ -223,6 +223,7 @@ def load_set_json(card_set):
         conn.close()
         return count
     else:
+        conn.close()
         print(card_set + " not in cardobj!")
         return 0
     
