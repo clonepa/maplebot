@@ -15,6 +15,7 @@ import collections
 
 client = discord.Client()
 token = mapletoken.get_token()
+mtgox_channel_id = mapletoken.get_mainchannel_id()
 
 def load_mtgjson():
     with open ('AllSets.json', encoding="utf8") as f:
@@ -226,7 +227,10 @@ def load_set_json(card_set):
 
 def validate_deck(deckstring, user):
     deck = deckhash.convert_deck_to_boards(deckstring)
-    deck = collections.counter(deck) #turn list of repeated card names into dict in format "name": amount
+
+    #flatten tuple of deck and sb into repeating list of all cards, 
+    #then turn list of repeated card names into dict in format {"name": amount}
+    deck = collections.Counter(deck[0] + deck[1]) 
 
     missing_cards = {}
 
@@ -234,17 +238,21 @@ def validate_deck(deckstring, user):
     c = conn.cursor()
     c.execute("SELECT card_name, amount_owned FROM collection INNER JOIN cards ON collection.multiverse_id = cards.multiverse_id WHERE owner_id=:ownerid", {"ownerid": user})
     collection = c.fetchall()
+    conn.close()
     collection = dict((n, a) for n, a in collection) #turn list of tuples to dict in same format as deck
 
     for card in deck:
-        deck_collection_diff = deck[card] - collection[card]
-        if deck_collection_diff > 0: #if amt required by deck > amt owned
-            missing_cards[card] = deck_collection_diff
+        #if user has card in collection, check difference between required amt and owned amt
+        #if amt required by deck > amt owned, set the key for card in missing_cards to the difference
+        if card in collection:
+            deck_collection_diff = deck[card] - collection[card]
+            if deck_collection_diff > 0:
+                missing_cards[card] = deck_collection_diff
+        #if they don't have it, add the full amount of card required to missing_cards
+        else:
+            missing_cards[card] = deck[card]
 
-    if missing_cards:
-        return missing_cards
-    else:
-        return True
+    return missing_cards
 
 @client.event
 async def on_ready():
@@ -255,6 +263,17 @@ async def on_ready():
 
 @client.event
 async def on_message(message):
+    if message.content.startswith('!validatedeck'):
+        deck = message.content[len("!validatedeck "):].strip()
+        missing_cards = validate_deck(deck, str(message.author.id))
+
+        if missing_cards:
+            needed_cards_str = '\n'.join(["{0} {1}".format(missing_cards[card], card) for card in missing_cards])
+            await client.send_message(message.channel, "<@{0}>, you don't have the cards for that deck!! You need:\n```{1}```".format(message.author.id, needed_cards_str))
+        else:
+            hashed_deck = deckhash.make_deck_hash(*deckhash.convert_deck_to_boards(deck))
+            await client.send_message(client.get_channel(mtgox_channel_id), "<@{0}> has submitted a collection-valid deck! hash: `{1}`".format(message.author.id, hashed_deck))
+
     if message.content.startswith('!debugbooster'):
         card_set = message.content.split(' ')[1].upper()
         seed = float(message.content.split(' ')[2])
