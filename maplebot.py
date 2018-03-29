@@ -265,6 +265,24 @@ def validate_deck(deckstring, user):
 
     return missing_cards
 
+def export_collection_to_sideboard(user):
+    conn = sqlite3.connect('maple.db')
+    c = conn.cursor()
+    c.execute("SELECT SUM(amount_owned), card_name FROM collection INNER JOIN cards ON collection.multiverse_id = cards.multiverse_id WHERE owner_id = :ownerid GROUP BY card_name ORDER BY SUM(amount_owned) DESC", {"ownerid": user})
+    return '\n'.join(['SB: {0} {1}'.format(card[0], card[1]) for card in c.fetchall()])
+    conn.close()
+
+def is_registered(discord_id):
+    conn = sqlite3.connect('maple.db')
+    c = conn.cursor()
+    c.execute("SELECT discord_id FROM users WHERE discord_id=:id", {"id": discord_id})
+    r = c.fetchone()
+    conn.close()
+    if r:
+        return True
+    else:
+        return False
+
 @client.event
 async def on_ready():
     print('Logged in as')
@@ -274,6 +292,22 @@ async def on_ready():
 
 @client.event
 async def on_message(message):
+    if message.content.startswith('!exportcollection'):
+        user = message.author.id
+
+        if not is_registered(user):
+            await client.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
+            return
+
+        await client.send_typing(message.channel)
+        exported_collection = export_collection_to_sideboard(message.author.id)
+
+        r = requests.post('https://ptpb.pw/', data={"content": exported_collection})
+        pb_url = next(i.split(' ')[1] for i in r.text.split('\n') if i.startswith('url:'))
+
+        await client.send_message(message.channel, "<@{0}>, here's your exported collection: {1}\ncopy it into cockatrice to build a deck!!".format(user, pb_url))
+
+
     if message.content.startswith('!validatedeck'):
         deck = message.content[len("!validatedeck "):].strip()
         missing_cards = validate_deck(deck, str(message.author.id))
