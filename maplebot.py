@@ -170,7 +170,7 @@ def give_booster(owner, card_set):
 def adjustbux (who, how_much):
     conn = sqlite3.connect('maple.db')
     c = conn.cursor()
-    c.execute("UPDATE users SET cash = cash + " + how_much + " WHERE discord_id='" + who + "' OR name='" + who + "'")
+    c.execute("UPDATE users SET cash = cash + " + str(how_much) + " WHERE discord_id='" + who + "' OR name='" + who + "'")
     conn.commit()
     conn.close()
 
@@ -224,7 +224,16 @@ def load_set_json(card_set):
         print(card_set + " not in cardobj!")
         return 0
     
-
+def check_bux(who):
+    conn = sqlite3.connect('maple.db')
+    c = conn.cursor()
+    c.execute("SELECT cash FROM users WHERE discord_id=:who OR name=:who", {"who": who} )
+    result = c.fetchone()
+    conn.close()
+    if result:
+        return result[0]
+    return 0
+    
 @client.event
 async def on_ready():
     print('Logged in as')
@@ -298,7 +307,44 @@ async def on_message(message):
         p2 = message.content.split(' ')[2]
         adjustbux(p1, p2)
         await client.send_message(message.channel, "updated bux")
+        
+    if message.content.startswith('!givebux'):
+        p1 = message.content.split(' ')[1]
+        p2 = float(message.content.split(' ')[2])
+        myself = message.author.id
+        mycash = check_bux(myself)
+        otherperson = ""
+        conn = sqlite3.connect('maple.db')
+        c = conn.cursor()
+        c.execute("SELECT name FROM users WHERE discord_id=:who OR name=:who", {"who":p1} )
+        result = c.fetchone()
+        if result:
+            otherperson = result[0]
+        else:
+            await client.send_message(message.channel, "I'm not sure who you're trying to give money to...")
+            return
 
+        c.execute("SELECT name FROM users WHERE discord_id=:who OR name=:who", {"who":myself} )
+        result = c.fetchone()
+        if result:
+            if result[0] == otherperson:
+                await client.send_message(message.channel, "sending money to yourself... that's shady...")
+                return
+           
+        if p2 < 0:
+            await client.send_message(message.channel, "wait a minute that's a robbery!")
+            return
+        if mycash == 0.0:
+            await client.send_message(message.channel, "n0 ca$h my dude")
+            return
+        if mycash - p2 < 0:
+            p2 = 0
+        adjustbux(myself, p2 * -1)
+        adjustbux(otherperson, p2)
+        await client.send_message(message.channel, "sent ${0} to {1}".format(p2, p1))
+        conn.close()
+        
+        
     #bot will time out while waiting for this to finish, so you know be careful out there
     if message.content.startswith('!populatecardinfo'):
         outstring = ""
