@@ -334,11 +334,9 @@ async def on_message(message):
         if p2 < 0:
             await client.send_message(message.channel, "wait a minute that's a robbery!")
             return
-        if mycash == 0.0:
-            await client.send_message(message.channel, "n0 ca$h my dude")
+        if mycash == 0 or mycash - p2 < 0:
+            await client.send_message(message.channel, "not enough bux to ride this trux :surfer:")
             return
-        if mycash - p2 < 0:
-            p2 = 0
         adjustbux(myself, p2 * -1)
         adjustbux(otherperson, p2)
         await client.send_message(message.channel, "sent ${0} to {1}".format(p2, p1))
