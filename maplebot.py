@@ -11,6 +11,7 @@ import requests
 import re
 import time
 import base64
+import collections
 
 client = discord.Client()
 token = mapletoken.get_token()
@@ -222,6 +223,28 @@ def load_set_json(card_set):
     else:
         return -1
     conn.close()
+
+def validate_deck(deckstring, user):
+    deck = deckhash.convert_deck_to_boards(deckstring)
+    deck = collections.counter(deck) #turn list of repeated card names into dict in format "name": amount
+
+    missing_cards = {}
+
+    conn = sqlite3.connect('maple.db')
+    c = conn.cursor()
+    c.execute("SELECT card_name, amount_owned FROM collection INNER JOIN cards ON collection.multiverse_id = cards.multiverse_id WHERE owner_id=:ownerid", {"ownerid": user})
+    collection = c.fetchall()
+    collection = dict((n, a) for n, a in collection) #turn list of tuples to dict in same format as deck
+
+    for card in deck:
+        deck_collection_diff = deck[card] - collection[card]
+        if deck_collection_diff > 0: #if amt required by deck > amt owned
+            missing_cards[card] = deck_collection_diff
+
+    if missing_cards:
+        return missing_cards
+    else:
+        return True
 
 @client.event
 async def on_ready():
