@@ -172,7 +172,7 @@ def give_booster(owner, card_set):
 def adjustbux (who, how_much):
     conn = sqlite3.connect('maple.db')
     c = conn.cursor()
-    c.execute("UPDATE users SET cash = cash + " + how_much + " WHERE discord_id='" + who + "' OR name='" + who + "'")
+    c.execute("UPDATE users SET cash = cash + " + str(how_much) + " WHERE discord_id='" + who + "' OR name='" + who + "'")
     conn.commit()
     conn.close()
 
@@ -216,14 +216,25 @@ def load_set_json(card_set):
             else:
                 random.seed(card['name'] + card_set)
                 mvid = -random.randrange(100000000)
-                print('IDless card {0} assigned fallback ID {1}'.format(card['name'], mvid))
+                #print('IDless card {0} assigned fallback ID {1}'.format(card['name'], mvid))
             c.execute("INSERT OR IGNORE INTO cards VALUES(?, ?, ?, ?, ?)", (mvid, card['name'], card_set, card['type'], card['rarity']) )
             count += 1
         conn.commit()
+        conn.close()
         return count
     else:
-        return -1
+        print(card_set + " not in cardobj!")
+        return 0
+    
+def check_bux(who):
+    conn = sqlite3.connect('maple.db')
+    c = conn.cursor()
+    c.execute("SELECT cash FROM users WHERE discord_id=:who OR name=:who", {"who": who} )
+    result = c.fetchone()
     conn.close()
+    if result:
+        return result[0]
+    return 0
 
 def validate_deck(deckstring, user):
     deck = deckhash.convert_deck_to_boards(deckstring)
@@ -339,7 +350,56 @@ async def on_message(message):
         adjustbux(p1, p2)
         await client.send_message(message.channel, "updated bux")
         
+    if message.content.startswith('!givebux'):
+        p1 = message.content.split(' ')[1]
+        p2 = float(message.content.split(' ')[2])
+        myself = message.author.id
+        mycash = check_bux(myself)
+        otherperson = ""
+        conn = sqlite3.connect('maple.db')
+        c = conn.cursor()
+        c.execute("SELECT name FROM users WHERE discord_id=:who OR name=:who", {"who":p1} )
+        result = c.fetchone()
+        if result:
+            otherperson = result[0]
+        else:
+            await client.send_message(message.channel, "I'm not sure who you're trying to give money to...")
+            return
 
+        c.execute("SELECT name FROM users WHERE discord_id=:who OR name=:who", {"who":myself} )
+        result = c.fetchone()
+        if result:
+            if result[0] == otherperson:
+                await client.send_message(message.channel, "sending money to yourself... that's shady...")
+                return
+           
+        if p2 < 0:
+            await client.send_message(message.channel, "wait a minute that's a robbery!")
+            return
+        if mycash == 0 or mycash - p2 < 0:
+            await client.send_message(message.channel, "not enough bux to ride this trux :surfer:")
+            return
+        adjustbux(myself, p2 * -1)
+        adjustbux(otherperson, p2)
+        await client.send_message(message.channel, "sent ${0} to {1}".format(p2, p1))
+        conn.close()
+        
+        
+    #bot will time out while waiting for this to finish, so you know be careful out there
+    if message.content.startswith('!populatecardinfo'):
+        outstring = ""
+        cardobj = load_mtgjson()
+        setcount = 0
+        count = 0
+        for cs in cardobj:
+            if not ("code" in cardobj[cs]):
+                continue
+            count += load_set_json(cardobj[cs]['code'].upper())
+            setcount += 1
+            print(count, setcount)
+
+        print('added {0} cards from {1} sets'.format(count, setcount))
+        
     if message.content.startswith('!populatesetinfo'):
         #do not use load_mtgjson() here
         with open ('AllSets.json', encoding="utf8") as f:
@@ -408,10 +468,13 @@ async def on_message(message):
 
     
     if message.content.startswith('!gutdump'):
-        table = message.content.split(' ')[1]
-        if table == None:
+        table = ""
+        if len(message.content.split(' ')) < 2:
             table = "users"
-        elif table == "maple":
+        else:
+            table = message.content.split(' ')[1]
+            
+        if table == "maple":
             with open(__file__) as f:
                 out = f.read(1024)
                 while (out):
