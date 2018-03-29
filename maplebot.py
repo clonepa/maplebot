@@ -366,10 +366,13 @@ async def on_message(message):
 
     
     if message.content.startswith('!gutdump'):
-        table = message.content.split(' ')[1]
-        if table == None:
+        table = ""
+        if len(message.content.split(' ')) < 2:
             table = "users"
-        elif table == "maple":
+        else:
+            table = message.content.split(' ')[1]
+            
+        if table == "maple":
             with open(__file__) as f:
                 out = f.read(1024)
                 while (out):
