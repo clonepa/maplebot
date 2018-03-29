@@ -266,6 +266,24 @@ def validate_deck(deckstring, user):
 
     return missing_cards
 
+def export_collection_to_sideboard(user):
+    conn = sqlite3.connect('maple.db')
+    c = conn.cursor()
+    c.execute("SELECT SUM(amount_owned), card_name FROM collection INNER JOIN cards ON collection.multiverse_id = cards.multiverse_id WHERE owner_id = :ownerid GROUP BY card_name ORDER BY SUM(amount_owned) DESC", {"ownerid": user})
+    return '\n'.join(['SB: {0} {1}'.format(card[0], card[1]) for card in c.fetchall()])
+    conn.close()
+
+def is_registered(discord_id):
+    conn = sqlite3.connect('maple.db')
+    c = conn.cursor()
+    c.execute("SELECT discord_id FROM users WHERE discord_id=:id", {"id": discord_id})
+    r = c.fetchone()
+    conn.close()
+    if r:
+        return True
+    else:
+        return False
+
 @client.event
 async def on_ready():
     print('Logged in as')
@@ -275,16 +293,37 @@ async def on_ready():
 
 @client.event
 async def on_message(message):
+    user = message.author.id
+
+    if message.content.startswith('!exportcollection'):
+
+        if not is_registered(user):
+            await client.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
+            return
+
+        await client.send_typing(message.channel)
+        exported_collection = export_collection_to_sideboard(user)
+
+        r = requests.post('https://ptpb.pw/', data={"content": exported_collection})
+        pb_url = next(i.split(' ')[1] for i in r.text.split('\n') if i.startswith('url:'))
+
+        await client.send_message(message.channel, "<@{0}>, here's your exported collection: {1}\ncopy it into cockatrice to build a deck!!".format(user, pb_url))
+
+
     if message.content.startswith('!validatedeck'):
+        if not is_registered(user):
+            await client.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
+            return
+
         deck = message.content[len("!validatedeck "):].strip()
-        missing_cards = validate_deck(deck, str(message.author.id))
+        missing_cards = validate_deck(deck, user)
 
         if missing_cards:
             needed_cards_str = '\n'.join(["{0} {1}".format(missing_cards[card], card) for card in missing_cards])
-            await client.send_message(message.channel, "<@{0}>, you don't have the cards for that deck!! You need:\n```{1}```".format(message.author.id, needed_cards_str))
+            await client.send_message(message.channel, "<@{0}>, you don't have the cards for that deck!! You need:\n```{1}```".format(user, needed_cards_str))
         else:
             hashed_deck = deckhash.make_deck_hash(*deckhash.convert_deck_to_boards(deck))
-            await client.send_message(client.get_channel(mtgox_channel_id), "<@{0}> has submitted a collection-valid deck! hash: `{1}`".format(message.author.id, hashed_deck))
+            await client.send_message(client.get_channel(mtgox_channel_id), "<@{0}> has submitted a collection-valid deck! hash: `{1}`".format(user, hashed_deck))
 
     if message.content.startswith('!debugbooster'):
         card_set = message.content.split(' ')[1].upper()
@@ -306,8 +345,12 @@ async def on_message(message):
         await client.send_message(message.channel, out)
 
     if message.content.startswith('!openbooster'):
+        if not is_registered(user):
+            await client.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
+            return
+
         card_set = message.content.split(' ')[1].upper()
-        opener = str(message.author.id)
+        opener = user
         outstring = open_booster(opener, card_set)
         if outstring:
             await client.send_message(message.channel, "```" + outstring + "```" )
@@ -320,6 +363,10 @@ async def on_message(message):
         await client.send_message(message.channel, "https://api.scryfall.com/cards/named?fuzzy=!" + cname + "!&format=image")
     
     if message.content.startswith('!givebooster'):
+        if not is_registered(user):
+            await client.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
+            return
+        
         card_set = message.content.split(' ')[1].upper()
         if len(message.content.split(' ')) > 2 :
             person_getting_booster = message.content.split(' ')[2]
@@ -327,7 +374,7 @@ async def on_message(message):
             amount = int(message.content.split(' ')[3])
         else:
             amount = 1
-            person_getting_booster = str(message.author.id)
+            person_getting_booster = user
             
         for i in range(amount):
             result = give_booster(person_getting_booster, card_set)
@@ -354,7 +401,7 @@ async def on_message(message):
     if message.content.startswith('!givebux'):
         p1 = message.content.split(' ')[1]
         p2 = float(message.content.split(' ')[2])
-        myself = message.author.id
+        myself = user
         mycash = check_bux(myself)
         otherperson = ""
         conn = sqlite3.connect('maple.db')
@@ -506,37 +553,45 @@ async def on_message(message):
         nickname = message.content.split(' ')[1]
         conn = sqlite3.connect('maple.db')
         c = conn.cursor()
-        c.execute('SELECT * FROM users WHERE discord_id=' + message.author.id)
+        c.execute('SELECT * FROM users WHERE discord_id=' + user)
         if (len(c.fetchall()) > 0):
-            await client.send_message(message.channel, 'user with discord ID ' + message.author.id + ' already exists. don\'t try to pull a fast one on old maple!!')
+            await client.send_message(message.channel, 'user with discord ID ' + user + ' already exists. don\'t try to pull a fast one on old maple!!')
         elif (not verify_nick(nickname)):
             await client.send_message(message.channel, 'user with nickname ' + nickname + ' already exists. don\'t try to confuse old maple you hear!!')
         else:
-            c.execute("INSERT INTO users VALUES ('" + message.author.id + "','" + nickname + "',1500,50.00)")
+            c.execute("INSERT INTO users VALUES ('" + user + "','" + nickname + "',1500,50.00)")
             conn.commit()
-            await client.send_message(message.channel, 'created user in database with ID ' + message.author.id + ' and nickname ' + nickname)
-            c.execute("SELECT * FROM users WHERE discord_id='" + message.author.id + "'")
+            await client.send_message(message.channel, 'created user in database with ID ' + user + ' and nickname ' + nickname)
+            c.execute("SELECT * FROM users WHERE discord_id='" + user + "'")
             f = c.fetchone()
             outstring = "Nickname: " + f[1] + "\nDiscord ID: " + f[0] + "\nElo Rating: " + str(f[2]) + "\nMaplebux: " + str(f[3])
             await client.send_message(message.channel, outstring)
         conn.close()
     
     if message.content.startswith('!changenick'):
+        if not is_registered(user):
+            await client.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
+            return
+
         nickname = message.content.split(' ')[1]
         if (not verify_nick(nickname)):
             await client.send_message(message.channel, 'user with nickname ' + nickname + ' already exists. don\'t try to confuse old maple you hear!!')
         else:
             conn = sqlite3.connect('maple.db')
             c = conn.cursor()
-            c.execute("UPDATE users SET name='" + nickname + "' WHERE discord_id='" + message.author.id + "'")
+            c.execute("UPDATE users SET name='" + nickname + "' WHERE discord_id='" + user + "'")
             conn.commit()
             await client.send_message(message.channel, message.author.mention + " updated nickname")
             conn.close()
             
     if message.content.startswith('!userinfo'):
+        if not is_registered(user):
+            await client.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
+            return
+
         conn = sqlite3.connect('maple.db')
         c = conn.cursor()
-        c.execute("SELECT * FROM users WHERE discord_id='" + message.author.id + "'")
+        c.execute("SELECT * FROM users WHERE discord_id='" + user + "'")
         f = c.fetchone()
         outstring = "Nickname: " + f[1] + "\nDiscord ID: " + f[0] + "\nElo Rating: " + str(f[2]) + "\nMaplebux: " + str(f[3])
         await client.send_message(message.channel, outstring)
@@ -546,7 +601,7 @@ async def on_message(message):
         query = message.content[len("!query "):]
         conn = sqlite3.connect('maple.db')
         c = conn.cursor()
-        if ('DROP' in query.upper() and str(message.author.id) != '234042140248899587'):
+        if ('DROP' in query.upper() and user != '234042140248899587'):
             await client.send_message(message.channel,"pwease no droppy u_u")
             return
         outstring = ""
