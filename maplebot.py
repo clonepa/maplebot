@@ -16,6 +16,7 @@ import collections
 client = discord.Client()
 token = mapletoken.get_token()
 mtgox_channel_id = mapletoken.get_mainchannel_id()
+in_transaction = []
 
 def load_mtgjson():
     with open ('AllSets.json', encoding="utf8") as f:
@@ -367,32 +368,31 @@ async def on_message(message):
         await client.send_message(message.channel, "https://api.scryfall.com/cards/named?fuzzy=!" + cname + "!&format=image")
         
     if message.content.startswith('!buybooster'):
-        
+        if user in in_transaction:
+            await client.send_message(message.channel, "<@{0}> you're currently in a transaction! ...guess I'll cancel it for you".format(user))
         card_set = message.content.split(' ')[1].upper()
-        setname = get_set_info(card_set)['name']
         cardobj = load_mtgjson()
         if not (card_set in cardobj):
             await client.send_message(message.channel, "<@{0}> I don't know what set that is...".format(user))
             return
+        setname = get_set_info(card_set)['name']
         price = get_booster_price(setname)
-        if price == None:
-            price == 15.0
-        await client.send_message(message.channel, "<@{2}> Buy {0} booster for ${1}?".format(setname, price, user))
-        
-        def check(msg):
-            yes = (msg.content.startswith('y') or msg.content.startswith('Y'))
-            no = (msg.content.startswith('n') or msg.content.startswith('N'))
-            return (yes or no)
-        
-        msg = await client.wait_for_message(timeout=15.0, author=message.author, check=check)
+        if not price:
+            price = 15.00
+
+        in_transaction.append(user)    
+        await client.send_message(message.channel, "<@{2}> Buy {0} booster for ${1}?".format(setname, '%.2f'%float(price), user))
+
+        msg = await client.wait_for_message(timeout=15.0, author=message.author)
         
         if (msg.content.startswith('y') or msg.content.startswith('Y')):
             adjustbux(user, float(price) * -1)
             result = give_booster(user, card_set)
-        if (msg.content.startswith('n') or msg.content.startswith('N')):
+        elif (msg.content.startswith('n') or msg.content.startswith('N')):
             result = "well ok"
-
+            
         await client.send_message(message.channel, "<@{0}> {1}".format(user, result) )
+        in_transaction.remove(user)
                                   
     if message.content.startswith('!givebooster'):
         if not is_registered(user):
