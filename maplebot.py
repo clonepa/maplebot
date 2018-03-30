@@ -148,7 +148,7 @@ def give_booster(owner, card_set):
         card_set = card_set.upper() #just in case
         cardobj = load_mtgjson()
         c.execute("SELECT card_set FROM cards WHERE card_set LIKE :cardset", {"cardset": card_set})
-
+        
         if not (card_set in cardobj):
             outmessage = "I don't know where to find that kind of booster..."
             return outmessage
@@ -172,7 +172,7 @@ def give_booster(owner, card_set):
 def adjustbux (who, how_much):
     conn = sqlite3.connect('maple.db')
     c = conn.cursor()
-    c.execute("UPDATE users SET cash = cash + " + str(how_much) + " WHERE discord_id='" + who + "' OR name='" + who + "'")
+    c.execute("UPDATE users SET cash = cash + :how_much WHERE discord_id=:who OR name=:who", {"how_much":'%.2f'%how_much,"who":who})
     conn.commit()
     conn.close()
 
@@ -293,7 +293,7 @@ async def on_ready():
 
 @client.event
 async def on_message(message):
-    user = message.author.id
+    user = str(message.author.id)
 
     if message.content.startswith('!exportcollection'):
 
@@ -309,8 +309,9 @@ async def on_message(message):
 
         await client.send_message(message.channel, "<@{0}>, here's your exported collection: {1}\ncopy it into cockatrice to build a deck!!".format(user, pb_url))
 
+ 
 
-    if message.content.startswith('!validatedeck'):
+    if message.content.startswith('!checkdeck'):
         if not is_registered(user):
             await client.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
             return
@@ -344,6 +345,9 @@ async def on_message(message):
 
         await client.send_message(message.channel, out)
 
+    if message.content.startswith('!checkbux'):
+        await client.send_message(message.channel, "<@{0}> your maplebux balance is: ${1}".format(user, '%.2f'%check_bux(user)))
+    
     if message.content.startswith('!openbooster'):
         if not is_registered(user):
             await client.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
@@ -361,7 +365,22 @@ async def on_message(message):
         cname = message.content[len("!maplecard "):]
         cname = cname.replace(" ","%20")
         await client.send_message(message.channel, "https://api.scryfall.com/cards/named?fuzzy=!" + cname + "!&format=image")
-    
+        
+    if message.content.startswith('!buybooster'):
+        
+        card_set = message.content.split(' ')[1].upper()
+        setname = get_set_info(card_set)['name']
+        price = get_booster_price(setname)
+        await client.send_message(message.channel, "Buy {0} booster for ${1}?".format(setname, price))
+        
+        def check(msg):
+            return (msg.content.startswith('y') or msg.content.startswith('Y'))
+        
+        message = await client.wait_for_message(timeout=15.0, author=message.author, check=check)
+        adjustbux(user, float(price) * -1)
+        result = give_booster(user, card_set)
+        await client.send_message(message.channel, result )
+                                  
     if message.content.startswith('!givebooster'):
         if not is_registered(user):
             await client.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
@@ -400,7 +419,7 @@ async def on_message(message):
         
     if message.content.startswith('!givebux'):
         p1 = message.content.split(' ')[1]
-        p2 = float(message.content.split(' ')[2])
+        p2 = float('%.2f'%float(message.content.split(' ')[2]))
         myself = user
         mycash = check_bux(myself)
         otherperson = ""
@@ -586,7 +605,7 @@ async def on_message(message):
             
     if message.content.startswith('!userinfo'):
         if not is_registered(user):
-            await client.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
+            await client.send_message(message.channel, "<@{0}>, you aren't registered!! :surfer:".format(user))
             return
 
         conn = sqlite3.connect('maple.db')
