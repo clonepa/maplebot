@@ -139,7 +139,7 @@ def gen_booster(card_set, seed=0):
                 gbooster += [r]        
         conn.close()
         return gbooster
-    
+
 def give_booster(owner, card_set):
         conn = sqlite3.connect('maple.db')
         c = conn.cursor()
@@ -316,7 +316,7 @@ async def on_message(message):
             await client.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
             return
 
-        deck = message.content[len("!validatedeck "):].strip()
+        deck = message.content[len(message.content.split(' ')[0]):].strip()
         missing_cards = validate_deck(deck, user)
 
         if missing_cards:
@@ -362,7 +362,7 @@ async def on_message(message):
             await client.send_message(message.channel, "don't have any of those homie!!" )
 
     if message.content.startswith("!maplecard"):
-        cname = message.content[len("!maplecard "):]
+        cname = message.content[len(message.content.split(' ')[0]):]
         cname = cname.replace(" ","%20")
         await client.send_message(message.channel, "https://api.scryfall.com/cards/named?fuzzy=!" + cname + "!&format=image")
         
@@ -370,16 +370,29 @@ async def on_message(message):
         
         card_set = message.content.split(' ')[1].upper()
         setname = get_set_info(card_set)['name']
+        cardobj = load_mtgjson()
+        if not (card_set in cardobj):
+            await client.send_message(message.channel, "<@{0}> I don't know what set that is...".format(user))
+            return
         price = get_booster_price(setname)
-        await client.send_message(message.channel, "Buy {0} booster for ${1}?".format(setname, price))
+        if price == None:
+            price == 15.0
+        await client.send_message(message.channel, "<@{2}> Buy {0} booster for ${1}?".format(setname, price, user))
         
         def check(msg):
-            return (msg.content.startswith('y') or msg.content.startswith('Y'))
+            yes = (msg.content.startswith('y') or msg.content.startswith('Y'))
+            no = (msg.content.startswith('n') or msg.content.startswith('N'))
+            return (yes or no)
         
-        message = await client.wait_for_message(timeout=15.0, author=message.author, check=check)
-        adjustbux(user, float(price) * -1)
-        result = give_booster(user, card_set)
-        await client.send_message(message.channel, result )
+        msg = await client.wait_for_message(timeout=15.0, author=message.author, check=check)
+        
+        if (msg.content.startswith('y') or msg.content.startswith('Y')):
+            adjustbux(user, float(price) * -1)
+            result = give_booster(user, card_set)
+        if (msg.content.startswith('n') or msg.content.startswith('N')):
+            result = "well ok"
+
+        await client.send_message(message.channel, "<@{0}> {1}".format(user, result) )
                                   
     if message.content.startswith('!givebooster'):
         if not is_registered(user):
@@ -564,7 +577,7 @@ async def on_message(message):
         conn.close()
         
     if message.content.startswith('!hash'):
-        thing_to_hash = message.content[len("!hash "):]
+        thing_to_hash = message.content[len(message.content.split(' ')[0]):]
         hashed_thing = deckhash.make_deck_hash(*deckhash.convert_deck_to_boards(thing_to_hash))
         await client.send_message(message.channel, 'hashed deck: ' + hashed_thing)
         
@@ -617,7 +630,7 @@ async def on_message(message):
         conn.close()
         
     if message.content.startswith('!query'):
-        query = message.content[len("!query "):]
+        query = message.content[len(message.content.split(' ')[0]):]
         conn = sqlite3.connect('maple.db')
         c = conn.cursor()
         if ('DROP' in query.upper() and user != '234042140248899587'):
