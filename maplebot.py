@@ -370,6 +370,7 @@ async def on_message(message):
     if message.content.startswith('!buybooster'):
         if user in in_transaction:
             await client.send_message(message.channel, "<@{0}> you're currently in a transaction! ...guess I'll cancel it for you".format(user))
+            in_transaction.remove(user)
         card_set = message.content.split(' ')[1].upper()
         cardobj = load_mtgjson()
         if not (card_set in cardobj):
@@ -384,15 +385,18 @@ async def on_message(message):
         await client.send_message(message.channel, "<@{2}> Buy {0} booster for ${1}?".format(setname, '%.2f'%float(price), user))
 
         msg = await client.wait_for_message(timeout=15.0, author=message.author)
-        
+        if not msg:
+            return
         if (msg.content.startswith('y') or msg.content.startswith('Y')):
             adjustbux(user, float(price) * -1)
             result = give_booster(user, card_set)
         elif (msg.content.startswith('n') or msg.content.startswith('N')):
             result = "well ok"
-            
-        await client.send_message(message.channel, "<@{0}> {1}".format(user, result) )
+
+        if result:
+            await client.send_message(message.channel, "<@{0}> {1}".format(user, result) )
         in_transaction.remove(user)
+
                                   
     if message.content.startswith('!givebooster'):
         if not is_registered(user):
