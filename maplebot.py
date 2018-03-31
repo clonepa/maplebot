@@ -170,7 +170,7 @@ def give_booster(owner, card_set):
             outmessage = "booster added to inventory!"
         return outmessage
 
-def adjustbux (who, how_much):
+def adjustbux(who, how_much):
     conn = sqlite3.connect('maple.db')
     c = conn.cursor()
     c.execute("UPDATE users SET cash = cash + :how_much WHERE discord_id=:who OR name=:who", {"how_much":'%.2f'%how_much,"who":who})
@@ -303,6 +303,72 @@ def update_elo(who, elo):
     conn.close()
     
 
+def give_card(user, target, card, amount):
+    # check that amount > 0:
+    return_dict = dict.fromkeys(['code', 'card_name', 'amount_owned', 'target_id'])
+    if amount < 1:
+        return_dict['code'] = 4 # = invalid amount
+        return return_dict
+    conn = sqlite3.connect('maple.db')
+    c = conn.cursor()
+    # user is guaranteed valid by the command parser
+    # check that target is valid:
+    c.execute("SELECT discord_id FROM users WHERE discord_id=:target OR name=:target", {"target": target})
+    r = c.fetchone()
+    # if target exists and is not user:
+    if r and r[0] != user:
+        target_id = r[0]
+    else:
+        conn.close()
+        return_dict['code'] = 1 # = target invalid
+        return return_dict
+    # check that user has card:
+    c.execute("SELECT collection.rowid, collection.multiverse_id, amount_owned, card_name FROM collection INNER JOIN cards ON collection.multiverse_id = cards.multiverse_id WHERE owner_id = :user AND (card_name LIKE :card OR collection.multiverse_id LIKE :card)", {"user": user,"card": card})
+    r = c.fetchone()
+    if r:
+        origin_rowid, multiverse_id, origin_amountowned, card_name = r
+    else:
+        conn.close()
+        return_dict['code'] = 2 # = card not in collection
+        return return_dict
+
+    # check that user has enough of card:
+    if amount > origin_amountowned:
+        conn.close()
+        return_dict['code'] = 3 # = not enough of card
+        return_dict['card_name'] = card_name
+        return_dict['amount_owned'] = origin_amountowned
+        return return_dict
+    # convert 
+
+    # check if target owns any of card and get rowid if so:
+    c.execute("SELECT rowid, amount_owned FROM collection WHERE owner_id = :target AND multiverse_id = :multiverse_id", {"target": target_id,"multiverse_id": multiverse_id})
+    r = c.fetchone()
+    # if already owned, add to that rowid
+    if r:
+        target_rowid, target_amountowned = r
+        c.execute("UPDATE collection SET amount_owned = :new_amount WHERE rowid = :rowid", 
+                  {"new_amount": (target_amountowned + amount), "rowid": target_rowid})
+    # otherwise, create new row with that amount
+    else:
+        c.execute("INSERT INTO collection VALUES (:target_id, :multiverse_id, :amount)",
+                  {"target_id": target_id, "multiverse_id": multiverse_id, "amount": amount})
+    conn.commit()
+    # remove amount owned from user
+    c.execute("UPDATE collection SET amount_owned = :new_amount WHERE rowid = :rowid",
+              {"new_amount": (origin_amountowned - amount), "rowid": origin_rowid})
+    conn.commit()
+
+    # set up the return dict
+    return_dict['code'] = 0 # = success!
+    return_dict['card_name'] = card_name
+    return_dict['target_id'] = target_id
+    conn.close()
+    return return_dict
+
+
+
+
 @client.event
 async def on_ready():
     print('Logged in as')
@@ -313,6 +379,32 @@ async def on_ready():
 @client.event
 async def on_message(message):
     user = str(message.author.id)
+
+    #------------------------------------------------------------------------------------------------------------#
+
+    if message.content.startswith('!givecard'):
+        if not is_registered(user):
+            await client.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
+            return
+
+        #format: !givecard clonepa Swamp 2
+        target, card = message.content.split(maxsplit=2)[1:] # = target = 'clonepa', card= 'Swamp 2'
+        amount_re = re.search(r'\s+(\d+)$', card)
+        if amount_re:
+            amount = int(amount_re[1])
+            card = card[:-len(amount_re[0])]
+        else:
+            amount = 1
+
+        result_dict = give_card(user, target, card, amount)
+
+        reply_dict = {0: "gave {0} {1} to <@{2}>!".format(amount, result_dict['card_name'], result_dict['target_id']),
+                      1: "that's not a valid recipient!!",
+                      2: "hey, you don't have that card at all!",
+                      3: "hold up, you only have {0} of {1}!!".format(result_dict['amount_owned'], result_dict['card_name']),
+                      4: "now that's just silly"}
+
+        await client.send_message(message.channel, "<@{0}> {1}".format(user, reply_dict[ result_dict['code'] ]))
 
     #------------------------------------------------------------------------------------------------------------#
     
@@ -621,7 +713,9 @@ async def on_message(message):
                      (multiverse_id INTEGER PRIMARY KEY, card_name TEXT, card_set TEXT, card_type TEXT, rarity TEXT)''')    
         conn.commit()
         c.execute('''CREATE TABLE IF NOT EXISTS collection
-                     (owner_id TEXT, multiverse_id INTEGER, amount_owned INTEGER, FOREIGN KEY(owner_id) REFERENCES users(discord_id), FOREIGN KEY(multiverse_id) REFERENCES cards(multiverse_id))''')    
+                     (owner_id TEXT, multiverse_id INTEGER, amount_owned INTEGER,
+                     FOREIGN KEY(owner_id) REFERENCES users(discord_id), FOREIGN KEY(multiverse_id) REFERENCES cards(multiverse_id),
+                     PRIMARY KEY (owner_id, multiverse_id))''')    
         conn.commit()
         c.execute('''CREATE TABLE IF NOT EXISTS booster_inventory
                      (owner_id TEXT, card_set TEXT, seed REAL, FOREIGN KEY(owner_id) REFERENCES users(discord_id), FOREIGN KEY(card_set) REFERENCES set_map(code))''')
@@ -632,6 +726,10 @@ async def on_message(message):
         c.execute('''CREATE TABLE IF NOT EXISTS timestamped_base64_strings
                      (name TEXT PRIMARY KEY, b64str TEXT, timestamp REAL)''')
         conn.commit()
+        c.execute('''CREATE TRIGGER IF NOT EXISTS delete_from_collection_on_zero 
+                    AFTER UPDATE OF amount_owned ON collection BEGIN 
+                    DELETE FROM collection WHERE amount_owned < 1; 
+                    END''')
         conn.close()
         
     #------------------------------------------------------------------------------------------------------------#
