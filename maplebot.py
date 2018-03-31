@@ -298,7 +298,7 @@ async def on_message(message):
 
     #------------------------------------------------------------------------------------------------------------#
     
-    if message.content.startswith('!exportcollection'):
+    if message.content.startswith('!exportcollection') or message.content.startswith('!exportcollectiom'):
 
         if not is_registered(user):
             await client.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
@@ -347,12 +347,12 @@ async def on_message(message):
 
     #------------------------------------------------------------------------------------------------------------#
     
-    elif message.content.startswith('!checkbux'):
+    elif message.content.startswith('!checkbux') or message.content.startswith('!checkvux'):
         await client.send_message(message.channel, "<@{0}> your maplebux balance is: ${1}".format(user, '%.2f'%check_bux(user)))
 
     #------------------------------------------------------------------------------------------------------------#
 
-    elif message.content.startswith('!givebux'):
+    elif message.content.startswith('!givebux') or message.content.startswith('!givevux'):
             p1 = message.content.split(' ')[1]
             p2 = float('%.2f'%float(message.content.split(' ')[2]))
             myself = user
@@ -388,7 +388,7 @@ async def on_message(message):
 
     #------------------------------------------------------------------------------------------------------------#
     
-    elif message.content.startswith('!openbooster'):
+    elif message.content.startswith('!openbooster') or message.content.startswith('!opemvooster'):
         if not is_registered(user):
             await client.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
             return
@@ -410,7 +410,7 @@ async def on_message(message):
 
     #------------------------------------------------------------------------------------------------------------#
         
-    elif message.content.startswith('!buybooster'):
+    elif message.content.startswith('!buybooster') or message.content.startswith('!vuyvooster'):
         if user in in_transaction:
             await client.send_message(message.channel, "<@{0}> you're currently in a transaction! ...guess I'll cancel it for you".format(user))
             in_transaction.remove(user)
@@ -496,7 +496,7 @@ async def on_message(message):
 
     #------------------------------------------------------------------------------------------------------------#
     
-    elif message.content.startswith('!changenick'):
+    elif message.content.startswith('!changenick') or message.content.startswith('!chamgemick'):
         if not is_registered(user):
             await client.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
             return
@@ -514,7 +514,7 @@ async def on_message(message):
 
     #------------------------------------------------------------------------------------------------------------#
             
-    elif message.content.startswith('!userinfo'):
+    elif message.content.startswith('!userinfo') or message.content.startswith('!userimfo'):
         if not is_registered(user):
             await client.send_message(message.channel, "<@{0}>, you aren't registered!! :surfer:".format(user))
             return
@@ -598,7 +598,7 @@ async def on_message(message):
         
     #------------------------------------------------------------------------------------------------------------#
         
-    elif message.content.startswith('!setupdb'):
+    elif message.content.startswith('!setupdb') or message.content.startswith('!setupdv'):
         conn = sqlite3.connect('maple.db')
         c = conn.cursor()
         c.execute('''CREATE TABLE IF NOT EXISTS users
@@ -626,7 +626,7 @@ async def on_message(message):
         
     #------------------------------------------------------------------------------------------------------------#
         
-    elif message.content.startswith('!populatesetinfo'):
+    elif message.content.startswith('!populatesetinfo') or message.content.startswith('!populatesetimfo'):
         #do not use load_mtgjson() here
         with open ('AllSets.json', encoding="utf8") as f:
             cardobj = json.load(f)
@@ -650,7 +650,7 @@ async def on_message(message):
         
     #------------------------------------------------------------------------------------------------------------#
         
-    elif message.content.startswith('!populatecardinfo'):
+    elif message.content.startswith('!populatecardinfo') or message.content.startswith('!populatecardimfo'):
         #bot will time out while waiting for this to finish, so you know be careful out there
         outstring = ""
         cardobj = load_mtgjson()
@@ -666,7 +666,7 @@ async def on_message(message):
         
     #------------------------------------------------------------------------------------------------------------#
         
-    elif message.content.startswith('!debugbooster'):
+    elif message.content.startswith('!debugbooster') or message.content.startswith('!devugvooster'):
         card_set = message.content.split(' ')[1].upper()
         seed = float(message.content.split(' ')[2])
         await client.send_message(message.channel, "```" + str(gen_booster(card_set,seed)) + "```" )
@@ -679,7 +679,7 @@ async def on_message(message):
         
     #------------------------------------------------------------------------------------------------------------#
         
-    elif message.content.startswith('!adjustbux'):
+    elif message.content.startswith('!adjustbux') or message.content.startswith('!adjustvux'):
         p1 = message.content.split(' ')[1]
         p2 = message.content.split(' ')[2]
         adjustbux(p1, p2)
@@ -687,7 +687,7 @@ async def on_message(message):
         
     #------------------------------------------------------------------------------------------------------------#
         
-    elif message.content.startswith('!givebooster'):
+    elif message.content.startswith('!givebooster') or message.content.startswith('!givevooster'):
         if not is_registered(user):
             await client.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
             return
@@ -707,7 +707,7 @@ async def on_message(message):
         
     #------------------------------------------------------------------------------------------------------------#
     
-    elif message.content.startswith('!loadsetjson'):
+    elif message.content.startswith('!loadsetjson') or message.content.startswith('!loadsetjsom'):
         card_set = message.content.split(' ')[1].upper()
 
         result = load_set_json(card_set)
