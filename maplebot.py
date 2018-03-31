@@ -351,6 +351,42 @@ async def on_message(message):
         await client.send_message(message.channel, "<@{0}> your maplebux balance is: ${1}".format(user, '%.2f'%check_bux(user)))
 
     #------------------------------------------------------------------------------------------------------------#
+
+    elif message.content.startswith('!givebux'):
+            p1 = message.content.split(' ')[1]
+            p2 = float('%.2f'%float(message.content.split(' ')[2]))
+            myself = user
+            mycash = check_bux(myself)
+            otherperson = ""
+            conn = sqlite3.connect('maple.db')
+            c = conn.cursor()
+            c.execute("SELECT name FROM users WHERE discord_id=:who OR name=:who", {"who":p1} )
+            result = c.fetchone()
+            if result:
+                otherperson = result[0]
+            else:
+                await client.send_message(message.channel, "I'm not sure who you're trying to give money to...")
+                return
+
+            c.execute("SELECT name FROM users WHERE discord_id=:who OR name=:who", {"who":myself} )
+            result = c.fetchone()
+            if result:
+                if result[0] == otherperson:
+                    await client.send_message(message.channel, "sending money to yourself... that's shady...")
+                    return
+               
+            if p2 < 0:
+                await client.send_message(message.channel, "wait a minute that's a robbery!")
+                return
+            if mycash == 0 or mycash - p2 < 0:
+                await client.send_message(message.channel, "not enough bux to ride this trux :surfer:")
+                return
+            adjustbux(myself, p2 * -1)
+            adjustbux(otherperson, p2)
+            await client.send_message(message.channel, "sent ${0} to {1}".format(p2, p1))
+            conn.close()
+
+    #------------------------------------------------------------------------------------------------------------#
     
     elif message.content.startswith('!openbooster'):
         if not is_registered(user):
@@ -635,41 +671,6 @@ async def on_message(message):
         seed = float(message.content.split(' ')[2])
         await client.send_message(message.channel, "```" + str(gen_booster(card_set,seed)) + "```" )
         
-    #------------------------------------------------------------------------------------------------------------#
-        
-    elif message.content.startswith('!givebux'):
-        p1 = message.content.split(' ')[1]
-        p2 = float('%.2f'%float(message.content.split(' ')[2]))
-        myself = user
-        mycash = check_bux(myself)
-        otherperson = ""
-        conn = sqlite3.connect('maple.db')
-        c = conn.cursor()
-        c.execute("SELECT name FROM users WHERE discord_id=:who OR name=:who", {"who":p1} )
-        result = c.fetchone()
-        if result:
-            otherperson = result[0]
-        else:
-            await client.send_message(message.channel, "I'm not sure who you're trying to give money to...")
-            return
-
-        c.execute("SELECT name FROM users WHERE discord_id=:who OR name=:who", {"who":myself} )
-        result = c.fetchone()
-        if result:
-            if result[0] == otherperson:
-                await client.send_message(message.channel, "sending money to yourself... that's shady...")
-                return
-           
-        if p2 < 0:
-            await client.send_message(message.channel, "wait a minute that's a robbery!")
-            return
-        if mycash == 0 or mycash - p2 < 0:
-            await client.send_message(message.channel, "not enough bux to ride this trux :surfer:")
-            return
-        adjustbux(myself, p2 * -1)
-        adjustbux(otherperson, p2)
-        await client.send_message(message.channel, "sent ${0} to {1}".format(p2, p1))
-        conn.close()
         
     #------------------------------------------------------------------------------------------------------------#
         
