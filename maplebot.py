@@ -284,6 +284,24 @@ def is_registered(discord_id):
         return True
     else:
         return False
+    
+def get_user_record(who, field=None):
+    conn = sqlite3.connect('maple.db')
+    c = conn.cursor()
+    if field == None:
+        field = "*"
+    c.execute("SELECT {0} FROM users WHERE discord_id='{1}' OR name='{1}'".format(field, who))
+    r = c.fetchone()
+    conn.close()
+    return r
+
+def update_elo(who, elo):
+    conn = sqlite3.connect('maple.db')
+    c = conn.cursor()
+    c.execute("UPDATE users SET elo_rating =:elo WHERE discord_id=:who OR name=:who",{"elo": elo, "who": who})
+    conn.commit()
+    conn.close()
+    
 
 @client.event
 async def on_ready():
@@ -445,23 +463,15 @@ async def on_message(message):
     elif message.content.startswith('!recordmatch'):
         p1 = message.content.split(' ')[1]
         p2 = message.content.split(' ')[2]
-        conn = sqlite3.connect('maple.db')
-        c = conn.cursor()
-        c.execute("SELECT elo_rating FROM users WHERE discord_id='" + p1 + "' OR name='" + p1 + "'")
-        p1elo = c.fetchone()[0]
-
-        c.execute("SELECT elo_rating FROM users WHERE discord_id='" + p2 + "' OR name='" + p2 + "'")
-        p2elo = c.fetchone()[0]
+        p1elo = get_user_record(p1,"elo_rating")[0]
+        p2elo = get_user_record(p2,"elo_rating")[0]
 
         newelo = calc_elo_change(p1elo, p2elo)
         bux_adjustment = 3.00 * (newelo[0] - p1elo)/32
         bux_adjustment = float('%.2f'%bux_adjustment)
         
-        
-        c.execute("UPDATE users SET elo_rating =" + str(newelo[0]) + " WHERE discord_id='" + p1 + "' OR name='" + p1 + "'")
-        c.execute("UPDATE users SET elo_rating =" + str(newelo[1]) + " WHERE discord_id='" + p2 + "' OR name='" + p2 + "'")    
-        conn.commit()
-        conn.close()
+        update_elo(p1, newelo[0])
+        update_elo(p2, newelo[1])
 
         adjustbux(p1, bux_adjustment)
         await client.send_message(message.channel,"" + p1 + " new elo: " + str(newelo[0]) + "\n" + p2 + " new elo: " + str(newelo[1]) + "\npayout: $" + str(bux_adjustment))           
@@ -681,7 +691,7 @@ async def on_message(message):
         
     elif message.content.startswith('!adjustbux'):
         p1 = message.content.split(' ')[1]
-        p2 = message.content.split(' ')[2]
+        p2 = float(message.content.split(' ')[2])
         adjustbux(p1, p2)
         await client.send_message(message.channel, "updated bux")
         
