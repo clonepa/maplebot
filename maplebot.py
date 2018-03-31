@@ -294,14 +294,13 @@ async def on_ready():
 
 @client.event
 async def on_message(message):
-    user = str(message.author.id)
-
+    user = str(message.author.id)   
     if message.content.startswith('!exportcollection'):
 
         if not is_registered(user):
             await client.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
             return
-
+        
         await client.send_typing(message.channel)
         exported_collection = export_collection_to_sideboard(user)
 
@@ -517,12 +516,19 @@ async def on_message(message):
         p2elo = c.fetchone()[0]
 
         newelo = calc_elo_change(p1elo, p2elo)
-        c.execute("UPDATE users SET elo_rating =" + str(newelo[0]) + " WHERE discord_id='" + p1 + "' OR name='" + p1 + "'")
-        c.execute("UPDATE users SET elo_rating =" + str(newelo[1]) + " WHERE discord_id='" + p2 + "' OR name='" + p2 + "'")
-        conn.commit()
-        await client.send_message(message.channel,"" + p1 + " new elo: " + str(newelo[0]) + "\n" + p2 + " new elo: " + str(newelo[1]))
+        bux_adjustment = 3.00 * (newelo[0] - p1elo)/32
+        bux_adjustment = float('%.2f'%bux_adjustment)
         
+        
+        c.execute("UPDATE users SET elo_rating =" + str(newelo[0]) + " WHERE discord_id='" + p1 + "' OR name='" + p1 + "'")
+        c.execute("UPDATE users SET elo_rating =" + str(newelo[1]) + " WHERE discord_id='" + p2 + "' OR name='" + p2 + "'")    
+        conn.commit()
         conn.close()
+
+        adjustbux(p1, bux_adjustment)
+        await client.send_message(message.channel,"" + p1 + " new elo: " + str(newelo[0]) + "\n" + p2 + " new elo: " + str(newelo[1]) + "\npayout: $" + str(bux_adjustment))
+        
+        
         
     if message.content.startswith('!setupdb'):
         conn = sqlite3.connect('maple.db')
