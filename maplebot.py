@@ -287,8 +287,10 @@ def is_registered(discord_id):
 
 def give_card(user, target, card, amount):
     # check that amount > 0:
+    return_dict = dict.fromkeys(['code', 'card_name', 'amount_owned', 'target_id'])
     if amount < 1:
-        return 4 # = invalid amount
+        return_dict['code'] = 4 # = invalid amount
+        return return_dict
     conn = sqlite3.connect('maple.db')
     c = conn.cursor()
     # user is guaranteed valid by the command parser
@@ -300,20 +302,25 @@ def give_card(user, target, card, amount):
         target_id = r[0]
     else:
         conn.close()
-        return 1 # 1 = target invalid
+        return_dict['code'] = 1 # = target invalid
+        return return_dict
     # check that user has card:
-    c.execute("SELECT collection.rowid, collection.multiverse_id, amount_owned FROM collection INNER JOIN cards ON collection.multiverse_id = cards.multiverse_id WHERE owner_id = :user AND (card_name LIKE :card OR collection.multiverse_id LIKE :card)", {"user": user,"card": card})
+    c.execute("SELECT collection.rowid, collection.multiverse_id, amount_owned, card_name FROM collection INNER JOIN cards ON collection.multiverse_id = cards.multiverse_id WHERE owner_id = :user AND (card_name LIKE :card OR collection.multiverse_id LIKE :card)", {"user": user,"card": card})
     r = c.fetchone()
     if r:
-        origin_rowid, multiverse_id, origin_amountowned = r
+        origin_rowid, multiverse_id, origin_amountowned, card_name = r
     else:
         conn.close()
-        return 2 # = card not in collection
+        return_dict['code'] = 2 # = card not in collection
+        return return_dict
 
     # check that user has enough of card:
     if amount > origin_amountowned:
         conn.close()
-        return 3 # = not enough for card
+        return_dict['code'] = 3 # = not enough of card
+        return_dict['card_name'] = card_name
+        return_dict['amount_owned'] = origin_amountowned
+        return return_dict
     # convert 
 
     # check if target owns any of card and get rowid if so:
@@ -333,8 +340,13 @@ def give_card(user, target, card, amount):
     c.execute("UPDATE collection SET amount_owned = :new_amount WHERE rowid = :rowid",
               {"new_amount": (origin_amountowned - amount), "rowid": origin_rowid})
     conn.commit()
+
+    # set up the return dict
+    return_dict['code'] = 0 # = success!
+    return_dict['card_name'] = card_name
+    return_dict['target_id'] = target_id
     conn.close()
-    return 0 # = success!
+    return return_dict
 
 
 
@@ -366,17 +378,15 @@ async def on_message(message):
         else:
             amount = 1
 
-        return_code = give_card(user, target, card, amount)
+        result_dict = give_card(user, target, card, amount)
 
-        print(card)
-        # todo: get target id for mentioning them, get card name in case multiverseid provided
-        reply_dict = {0: "gave {0} {1} to {2}!".format(amount, card, target),
+        reply_dict = {0: "gave {0} {1} to <@{2}>!".format(amount, result_dict['card_name'], result_dict['target_id']),
                       1: "that's not a valid recipient!!",
                       2: "hey, you don't have that card at all!",
-                      3: "you don't have enough of that card!!",
+                      3: "hold up, you only have {0} of {1}!!".format(result_dict['amount_owned'], result_dict['card_name']),
                       4: "now that's just silly"}
 
-        await client.send_message(message.channel, "<@{0}> {1}".format(user, reply_dict[return_code]))
+        await client.send_message(message.channel, "<@{0}> {1}".format(user, reply_dict[ result_dict['code'] ]))
 
     #------------------------------------------------------------------------------------------------------------#
     
