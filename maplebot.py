@@ -285,6 +285,32 @@ def is_registered(discord_id):
     else:
         return False
 
+def give_card(user, target, card, amount):
+    conn = sqlite3.connect('maple.db')
+    c = conn.cursor()
+    # user is guaranteed valid by the command parser
+    # check that target is valid
+    c.execute("SELECT discord_id FROM users WHERE discord_id=:target", {"target": target})
+    r = c.fetchone()
+    if r:
+        target_id = r[0]
+    else:
+        return 1 # 1 = target invalid
+    # check that player has card
+    c.execute("SELECT rowid, amount_owned FROM collection INNER JOIN cards ON collection.multiverse_id = cards.multiverse_id WHERE card_name LIKE :card OR multiverse_id LIKE :card", {"card": card})
+    r = c.fetchone()
+    if r:
+        card_rowid = r[0]
+    else:
+        return 2 # = card not in collection
+    # check that player has enough of card:
+    amount_owned = r[1]
+    if amount > amount_owned:
+        return 3 # = not enough for card
+    # check if target owns any of card:
+
+
+
 @client.event
 async def on_ready():
     print('Logged in as')
@@ -295,6 +321,24 @@ async def on_ready():
 @client.event
 async def on_message(message):
     user = str(message.author.id)
+
+    #------------------------------------------------------------------------------------------------------------#
+
+    if message.content.startswith('!givecard'):
+        if not is_registered(user):
+            await client.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
+            return
+
+        #format: !givecard clonepa Swamp 2
+        target, card = message.content.split(maxsplit=2)[1:] # = target = 'clonepa', card= '2 Swamp'
+        amount = re.search(r'\s+(\d+)$', card)
+        if amount:
+            amount = amount[1]
+        else:
+            amount = 1
+        card = card[1]
+
+        give_card(user, target, card, amount)
 
     #------------------------------------------------------------------------------------------------------------#
     
