@@ -318,7 +318,10 @@ def give_card(user, target, card, amount):
     # check that user has enough of card:
     if amount > origin_amountowned:
         conn.close()
-        return_dict['code'] = 3 # = not enough of card
+        if str(card) == str(origin_cards[0][1]): # if input card is a multiverse id:
+            return_dict['code'] = 5 # = not enough of printing
+        else:
+            return_dict['code'] = 3 # = not enough of card
         return_dict['card_name'] = card_name
         return_dict['amount_owned'] = origin_amountowned
         return return_dict
@@ -396,7 +399,8 @@ async def on_message(message):
                       1: "that's not a valid recipient!!",
                       2: "hey, you don't have that card at all!",
                       3: "hold up, you only have {0} of {1}!!".format(result_dict['amount_owned'], result_dict['card_name']),
-                      4: "now that's just silly"}
+                      4: "now that's just silly",
+                      5: "you only have {0} of that printing of {1}!".format(result_dict['amount_owned'], result_dict['card_name'])}
 
         await client.send_message(message.channel, "<@{0}> {1}".format(user, reply_dict[ result_dict['code'] ]))
 
