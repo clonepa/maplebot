@@ -685,7 +685,7 @@ async def on_message(message):
     #------------------------------------------------------------------------------------------------------------#
         
     elif message.content.startswith('!mapletest'):
-        await client.send_message(message.channel, 'i\'m maple-bot and my guts are made of python 3.6, brah')
+        await client.send_message(message.channel, 'i\'m {0} and my guts are made of python 3.6, brah'.format(client.user.name))
         
     #------------------------------------------------------------------------------------------------------------#
         
