@@ -274,7 +274,7 @@ def export_collection_to_sideboard(user):
     outstring = '\n'.join(['SB: {0} {1}'.format(card[0], card[1]) for card in c.fetchall()])
     conn.close()
     return outstring
-
+  
 def export_collection_to_list(user):
     who = get_user_record(user)
     conn = sqlite3.connect('maple.db')
@@ -284,7 +284,7 @@ def export_collection_to_list(user):
     for card in c.fetchall():
         out.append( {"amount": card[0], "name": card[1]} )
     conn.close()
-    return out    
+    return out
 
 def is_registered(discord_id):
     conn = sqlite3.connect('maple.db')
