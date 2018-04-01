@@ -5,7 +5,12 @@
 </head>
 <body>
 	{% if user %}
-	<h1>{{ user }}</h1>
+	<h2>{{ user[1] }}</h2>
+	<ul id="collection">
+    {% for item in collection %}
+        <li>{{ item.amount }} {{ item.name }}</li>
+    {% endfor %}
+    </ul>
 	{% else %}
 	<h1>back at it again</h1>
 	{% endif %}
