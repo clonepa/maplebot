@@ -177,31 +177,39 @@ def adjustbux(who, how_much):
     conn.commit()
     conn.close()
 
-def open_booster(owner, set):
+def open_booster(owner, card_set, amount):
+    opened_boosters = []
+
     conn = sqlite3.connect('maple.db')
     c = conn.cursor()
-    c.execute("SELECT *, rowid FROM booster_inventory WHERE owner_id=:name AND card_set LIKE :set", {"name": owner, "set": set})
-    mybooster = c.fetchone()
-    if mybooster == None:
-        return None
-    generated_booster = gen_booster(mybooster[1], mybooster[2])
-    rid = mybooster[3]
-    outstring = ""
-    for card in generated_booster:
-        c.execute("SELECT * FROM collection WHERE owner_id=:name AND multiverse_id=:mvid AND amount_owned > 0", {"name": owner, "mvid": card[0], "cname": card[1], "cset": card[2] })
-        cr = c.fetchone()
-        if not cr:
-            c.execute("INSERT INTO collection VALUES (:name,:mvid,1)", {"name": owner, "mvid": card[0]})
-        else:
-            c.execute("UPDATE collection SET amount_owned = amount_owned + 1 WHERE owner_id=:name AND multiverse_id=:mvid", {"name": owner, "mvid": card[0]})
-        
-        outstring += card[1] + " -- " + card[4] + "\n"
-    if outstring == "":
-        outstring = "It was empty... !"
-    c.execute("DELETE FROM booster_inventory WHERE rowid=:rowid", {"rowid": int(rid)}) 
+    c.execute("SELECT *, rowid FROM booster_inventory WHERE owner_id=:name AND card_set LIKE :set LIMIT :amount",
+             {"name": owner, "set": card_set, "amount": amount})
+    boosters = c.fetchall()
+    if boosters == None:
+        return opened_boosters
+
+
+    for mybooster in boosters:
+        generated_booster = gen_booster(mybooster[1], mybooster[2])
+        row_id = mybooster[3]
+        outstring = ""
+        for card in generated_booster:
+            c.execute("SELECT * FROM collection WHERE owner_id=:name AND multiverse_id=:mvid AND amount_owned > 0", {"name": owner, "mvid": card[0], "cname": card[1], "cset": card[2] })
+            cr = c.fetchone()
+            if not cr:
+                c.execute("INSERT INTO collection VALUES (:name,:mvid,1)", {"name": owner, "mvid": card[0]})
+            else:
+                c.execute("UPDATE collection SET amount_owned = amount_owned + 1 WHERE owner_id=:name AND multiverse_id=:mvid", 
+                         {"name": owner, "mvid": card[0]})
+            
+            outstring += card[1] + " -- " + card[4] + "\n"
+        if outstring == "":
+            outstring = "It was empty... !"
+        c.execute("DELETE FROM booster_inventory WHERE rowid=:rowid", {"rowid": int(row_id)})
+        opened_boosters.append(outstring)
     conn.commit()
     conn.close()
-    return outstring
+    return opened_boosters
 
 def load_set_json(card_set):
     count = 0
@@ -393,7 +401,9 @@ def give_card(user, target, card, amount):
     conn.close()
     return return_dict
 
-
+def make_ptpb(text):
+    r = requests.post('https://ptpb.pw/', data={"content": text})
+    return next(i.split(' ')[1] for i in r.text.split('\n') if i.startswith('url:'))
 
 
 @client.event
@@ -445,8 +455,7 @@ async def on_message(message):
         await client.send_typing(message.channel)
         exported_collection = export_collection_to_sideboard(user)
 
-        r = requests.post('https://ptpb.pw/', data={"content": exported_collection})
-        pb_url = next(i.split(' ')[1] for i in r.text.split('\n') if i.startswith('url:'))
+        pb_url = make_ptpb(exported_collection)
 
         await client.send_message(message.channel, "<@{0}>, here's your exported collection: {1}\ncopy it into cockatrice to build a deck!!".format(user, pb_url))
 
@@ -531,13 +540,30 @@ async def on_message(message):
             await client.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
             return
 
-        card_set = message.content.split(' ')[1].upper()
-        opener = user
-        outstring = open_booster(opener, card_set)
-        if outstring:
-            await client.send_message(message.channel, "```" + outstring + "```" )
+        args = message.content.split(maxsplit=2)[1:]
+        if len(args) < 2:
+            amount = 1
+        elif (args[1].isdigit()):
+            amount = int(args[1])
         else:
-            await client.send_message(message.channel, "don't have any of those homie!!" )
+            await client.send_message(message.channel, "<@{0}> that's nonsense bro!!".format(user))
+            return
+        card_set = args[0].upper()
+
+        await client.send_typing(message.channel)
+        boosters_list = open_booster(user, card_set, amount)
+        boosters_opened = len(boosters_list)
+        if boosters_opened == 1:
+            await client.send_message(message.channel, "<{0}>\n```{1}```".format(user, boosters_list[0]))
+        elif boosters_opened > 1:
+            outstring = "{0} opened {1} boosters by {2}:\n\n".format(boosters_opened, card_set, message.author.display_name)
+            for i, booster in enumerate(boosters_list):
+                outstring += "------- Booster #{0} -------\n".format(i + 1)
+                outstring += booster + '\n'
+            pb_url = make_ptpb(outstring)
+            await client.send_message(message.channel, "<@{0}>, your {1} opened {2} boosters: {3}".format(user, boosters_opened, card_set, pb_url))                        
+        else:
+            await client.send_message(message.channel, "<@{0}> don't have any of those homie!!".format(user))
 
     #------------------------------------------------------------------------------------------------------------#
     
