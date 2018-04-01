@@ -275,6 +275,7 @@ def export_collection_to_sideboard(user):
     conn.close()
     return outstring
 
+
 def export_collection_to_list(user):
     who = get_user_record(user)
     conn = sqlite3.connect('maple.db')
@@ -285,6 +286,7 @@ def export_collection_to_list(user):
         out.append( {"amount": card[0], "name": card[1]} )
     conn.close()
     return out    
+
 
 def is_registered(discord_id):
     conn = sqlite3.connect('maple.db')
