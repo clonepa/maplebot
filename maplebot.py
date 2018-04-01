@@ -322,11 +322,12 @@ def give_card(user, target, card, amount):
         conn.close()
         return_dict['code'] = 1 # = target invalid
         return return_dict
-    # check that user has card:
+    # check that user has card & get all instances of it:
     c.execute("SELECT collection.rowid, collection.multiverse_id, amount_owned, card_name FROM collection INNER JOIN cards ON collection.multiverse_id = cards.multiverse_id WHERE owner_id = :user AND (card_name LIKE :card OR collection.multiverse_id LIKE :card)", {"user": user,"card": card})
-    r = c.fetchone()
-    if r:
-        origin_rowid, multiverse_id, origin_amountowned, card_name = r
+    origin_cards = c.fetchall()
+    if origin_cards:
+        origin_amountowned = sum([row[2] for row in origin_cards])
+        card_name = origin_cards[0][3]
     else:
         conn.close()
         return_dict['code'] = 2 # = card not in collection
@@ -335,29 +336,43 @@ def give_card(user, target, card, amount):
     # check that user has enough of card:
     if amount > origin_amountowned:
         conn.close()
-        return_dict['code'] = 3 # = not enough of card
+        if str(card) == str(origin_cards[0][1]): # if input card is a multiverse id:
+            return_dict['code'] = 5 # = not enough of printing
+        else:
+            return_dict['code'] = 3 # = not enough of card
         return_dict['card_name'] = card_name
         return_dict['amount_owned'] = origin_amountowned
         return return_dict
-    # convert 
 
-    # check if target owns any of card and get rowid if so:
-    c.execute("SELECT rowid, amount_owned FROM collection WHERE owner_id = :target AND multiverse_id = :multiverse_id", {"target": target_id,"multiverse_id": multiverse_id})
-    r = c.fetchone()
-    # if already owned, add to that rowid
-    if r:
-        target_rowid, target_amountowned = r
-        c.execute("UPDATE collection SET amount_owned = :new_amount WHERE rowid = :rowid", 
-                  {"new_amount": (target_amountowned + amount), "rowid": target_rowid})
-    # otherwise, create new row with that amount
-    else:
-        c.execute("INSERT INTO collection VALUES (:target_id, :multiverse_id, :amount)",
-                  {"target_id": target_id, "multiverse_id": multiverse_id, "amount": amount})
-    conn.commit()
-    # remove amount owned from user
-    c.execute("UPDATE collection SET amount_owned = :new_amount WHERE rowid = :rowid",
-              {"new_amount": (origin_amountowned - amount), "rowid": origin_rowid})
-    conn.commit()
+    # copy amount to use as a counter
+    counter = amount
+    # for every instance of card found:
+    for card in origin_cards:
+        origin_rowid, multiverse_id, iter_amountowned, card_name = card
+
+        iter_amount = min(counter, iter_amountowned)
+        # check if target owns any of multiverse_id and get rowid and amt owned if so:
+        c.execute("SELECT rowid, amount_owned FROM collection WHERE owner_id = :target AND multiverse_id = :multiverse_id", {"target": target_id,"multiverse_id": multiverse_id})
+        r = c.fetchone()
+        if r:
+            target_rowid, target_amountowned = r
+            c.execute("UPDATE collection SET amount_owned = :new_amount WHERE rowid = :rowid", 
+                      {"new_amount": (target_amountowned + iter_amount), "rowid": target_rowid})
+        # otherwise, create new row with that amount
+        else:
+            c.execute("INSERT INTO collection VALUES (:target_id, :multiverse_id, :amount)",
+                      {"target_id": target_id, "multiverse_id": multiverse_id, "amount": iter_amount})
+        # remove amount owned from user
+        c.execute("UPDATE collection SET amount_owned = :new_amount WHERE rowid = :rowid",
+                  {"new_amount": (iter_amountowned - iter_amount), "rowid": origin_rowid})
+        conn.commit()
+        counter -= iter_amount
+        if counter < 0:
+            print('you fucked something up dogg, counter is', counter)
+            break
+        if counter == 0:
+            conn.commit()
+            break
 
     # set up the return dict
     return_dict['code'] = 0 # = success!
@@ -402,7 +417,8 @@ async def on_message(message):
                       1: "that's not a valid recipient!!",
                       2: "hey, you don't have that card at all!",
                       3: "hold up, you only have {0} of {1}!!".format(result_dict['amount_owned'], result_dict['card_name']),
-                      4: "now that's just silly"}
+                      4: "now that's just silly",
+                      5: "you only have {0} of that printing of {1}!".format(result_dict['amount_owned'], result_dict['card_name'])}
 
         await client.send_message(message.channel, "<@{0}> {1}".format(user, reply_dict[ result_dict['code'] ]))
 
