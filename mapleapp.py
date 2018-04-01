@@ -7,6 +7,8 @@ app = Flask(__name__)
 @app.route('/')
 @app.route('/<user>')
 def index(user=None):
+    user_record = None
+    collection = None
     if user:
         user_record= maplebot.get_user_record(user)
         collection = maplebot.export_collection_to_list(user)

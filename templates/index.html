@@ -2,15 +2,36 @@
 <html>
 <head>
 	<title>maplebot back at it</title>
+	<script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+	<script src="//cdn.datatables.net/1.10.16/js/jquery.dataTables.min.js"></script>
+	<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.16/css/jquery.dataTables.min.css">
+	<script>
+		var dataSet = []
+		{% if user %}
+    	{% for card in collection %}
+    		dataSet.push([ "{{ card.amount }}", "{{ card.name }}", "{{ card.set }}", "{{ card.type }}", "{{ card.rarity }}" ])
+    	{% endfor %}
+    	{% endif %}
+		$(document).ready(function() {
+	    $('#collection').DataTable( {
+	        data: dataSet,
+	        columns: [
+	            { title: "Amount" },
+	            { title: "Name" },
+	            { title: "Set" },
+	            { title: "Type" },
+	            { title: "Rarity" }
+	        ]
+	    } );
+	} );
+	</script>
 </head>
 <body>
 	{% if user %}
 	<h2>{{ user[1] }}</h2>
-	<ul id="collection">
-    {% for item in collection %}
-        <li>{{ item.amount }} {{ item.name }}</li>
-    {% endfor %}
-    </ul>
+	<div style="width:1024px">
+		<table id="collection" class="display" width="100%"></table>
+	</div>
 	{% else %}
 	<h1>back at it again</h1>
 	{% endif %}
