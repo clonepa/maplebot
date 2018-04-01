@@ -271,8 +271,20 @@ def export_collection_to_sideboard(user):
     conn = sqlite3.connect('maple.db')
     c = conn.cursor()
     c.execute("SELECT SUM(amount_owned), card_name FROM collection INNER JOIN cards ON collection.multiverse_id = cards.multiverse_id WHERE owner_id = :ownerid GROUP BY card_name ORDER BY SUM(amount_owned) DESC", {"ownerid": user})
-    return '\n'.join(['SB: {0} {1}'.format(card[0], card[1]) for card in c.fetchall()])
+    outstring = '\n'.join(['SB: {0} {1}'.format(card[0], card[1]) for card in c.fetchall()])
     conn.close()
+    return outstring
+
+def export_collection_to_list(user):
+    who = get_user_record(user)
+    conn = sqlite3.connect('maple.db')
+    c = conn.cursor()
+    c.execute("SELECT SUM(amount_owned), card_name FROM collection INNER JOIN cards ON collection.multiverse_id = cards.multiverse_id WHERE owner_id = :ownerid GROUP BY card_name ORDER BY SUM(amount_owned) DESC", {"ownerid": who[0]})
+    out = []
+    for card in c.fetchall():
+        out.append( {"amount": card[0], "name": card[1]} )
+    conn.close()
+    return out    
 
 def is_registered(discord_id):
     conn = sqlite3.connect('maple.db')
@@ -840,5 +852,6 @@ async def on_message(message):
         else:
             await client.send_message(message.channel, 'set code {0} not found'.format(card_set))
 
-    #------------------------------------------------------------------------------------------------------------#   
-client.run(token)
+    #------------------------------------------------------------------------------------------------------------#
+if __name__ == "__main__":            
+    client.run(token)
