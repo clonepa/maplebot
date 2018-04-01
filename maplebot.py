@@ -443,9 +443,6 @@ async def on_message(message):
         await client.send_typing(message.channel)
         exported_collection = export_collection_to_sideboard(user)
 
-        # r = requests.post('https://ptpb.pw/', data={"content": exported_collection})
-        # pb_url = next(i.split(' ')[1] for i in r.text.split('\n') if i.startswith('url:'))
-
         pb_url = make_ptpb(exported_collection)
 
         await client.send_message(message.channel, "<@{0}>, here's your exported collection: {1}\ncopy it into cockatrice to build a deck!!".format(user, pb_url))
