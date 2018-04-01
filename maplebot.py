@@ -271,8 +271,10 @@ def export_collection_to_sideboard(user):
     conn = sqlite3.connect('maple.db')
     c = conn.cursor()
     c.execute("SELECT SUM(amount_owned), card_name FROM collection INNER JOIN cards ON collection.multiverse_id = cards.multiverse_id WHERE owner_id = :ownerid GROUP BY card_name ORDER BY SUM(amount_owned) DESC", {"ownerid": user})
-    return '\n'.join(['SB: {0} {1}'.format(card[0], card[1]) for card in c.fetchall()])
+    outstring = '\n'.join(['SB: {0} {1}'.format(card[0], card[1]) for card in c.fetchall()])
     conn.close()
+    return outstring
+    
 
 def is_registered(discord_id):
     conn = sqlite3.connect('maple.db')
