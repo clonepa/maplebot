@@ -274,8 +274,7 @@ def export_collection_to_sideboard(user):
     outstring = '\n'.join(['SB: {0} {1}'.format(card[0], card[1]) for card in c.fetchall()])
     conn.close()
     return outstring
-
-
+  
 def export_collection_to_list(user):
     who = get_user_record(user)
     conn = sqlite3.connect('maple.db')
@@ -285,8 +284,7 @@ def export_collection_to_list(user):
     for card in c.fetchall():
         out.append( {"amount": card[0], "name": card[1]} )
     conn.close()
-    return out    
-
+    return out
 
 def is_registered(discord_id):
     conn = sqlite3.connect('maple.db')
@@ -735,31 +733,32 @@ async def on_message(message):
         c = conn.cursor()
         c.execute('''CREATE TABLE IF NOT EXISTS users
                      (discord_id TEXT, name TEXT, elo_rating INTEGER, cash REAL)''')
-        conn.commit()
+        
         c.execute('''CREATE TABLE IF NOT EXISTS match_history
                      (winner TEXT, loser TEXT, winner_deckhash TEXT, loser_deckhash TEXT, FOREIGN KEY(winner) REFERENCES users(discord_id), FOREIGN KEY(loser) REFERENCES users(discord_id))''')
-        conn.commit()
+
         c.execute('''CREATE TABLE IF NOT EXISTS cards
-                     (multiverse_id INTEGER PRIMARY KEY, card_name TEXT, card_set TEXT, card_type TEXT, rarity TEXT)''')    
-        conn.commit()
+                     (multiverse_id INTEGER PRIMARY KEY, card_name TEXT, card_set TEXT, card_type TEXT, rarity TEXT)''')
+        
         c.execute('''CREATE TABLE IF NOT EXISTS collection
                      (owner_id TEXT, multiverse_id INTEGER, amount_owned INTEGER,
                      FOREIGN KEY(owner_id) REFERENCES users(discord_id), FOREIGN KEY(multiverse_id) REFERENCES cards(multiverse_id),
-                     PRIMARY KEY (owner_id, multiverse_id))''')    
-        conn.commit()
+                     PRIMARY KEY (owner_id, multiverse_id))''')
+        
         c.execute('''CREATE TABLE IF NOT EXISTS booster_inventory
                      (owner_id TEXT, card_set TEXT, seed REAL, FOREIGN KEY(owner_id) REFERENCES users(discord_id), FOREIGN KEY(card_set) REFERENCES set_map(code))''')
-        conn.commit()
+        
         c.execute('''CREATE TABLE IF NOT EXISTS set_map
                      (name TEXT, code TEXT, alt_code TEXT, PRIMARY KEY (code, alt_code))''')
-        conn.commit()
+        
         c.execute('''CREATE TABLE IF NOT EXISTS timestamped_base64_strings
                      (name TEXT PRIMARY KEY, b64str TEXT, timestamp REAL)''')
-        conn.commit()
+        
         c.execute('''CREATE TRIGGER IF NOT EXISTS delete_from_collection_on_zero 
                     AFTER UPDATE OF amount_owned ON collection BEGIN 
                     DELETE FROM collection WHERE amount_owned < 1; 
                     END''')
+        conn.commit()
         conn.close()
         
     #------------------------------------------------------------------------------------------------------------#
