@@ -7,22 +7,40 @@
 	<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.16/css/jquery.dataTables.min.css">
 	<script>
 		var dataSet = []
+		var dataSet2 = []
 		{% if user %}
     	{% for card in collection %}
-    		dataSet.push([ "{{ card.amount }}", "{{ card.name }}", "{{ card.set }}", "{{ card.type }}", "{{ card.rarity }}" ])
-    	{% endfor %}
+    		dataSet.push([ {{ card.amount }}, "{{ card.name }}", "{{ card.set }}", "{{ card.type }}", "{{ card.rarity }}" ])
+    		//console.log("{{ card.name }}","{{ card.set }}")
+
+    		//build combined printings array
+    		var foundit = false
+    		for (var i = dataSet2.length - 1; i >= 0; i--) {
+    			if (dataSet2[i][1] == "{{ card.name }}"){
+    				dataSet2[i][0] += {{ card.amount }}
+    			    foundit = true
+    			    if( $.inArray("{{ card.set }}", dataSet2[i][2]) < 0)
+    			    	dataSet2[i][2].push("{{ card.set }}")
+    			}    
+         	}
+         	if (!foundit) {
+         		dataSet2.push([ {{ card.amount }}, "{{ card.name }}", ["{{ card.set }}"], "{{ card.type }}", "{{ card.rarity }}" ])
+         	}
+         {% endfor %}
+
     	{% endif %}
 		$(document).ready(function() {
-	    $('#collection').DataTable( {
-	        data: dataSet,
-	        columns: [
-	            { title: "Amount" },
-	            { title: "Name" },
-	            { title: "Set" },
-	            { title: "Type" },
-	            { title: "Rarity" }
-	        ]
-	    } );
+		    $('#collection').DataTable( {
+		        data: dataSet2,
+		        columns: [
+		            { title: "Amount" },
+		            { title: "Name" },
+		            { title: "Set" },
+		            { title: "Type" },
+		            { title: "Rarity" }
+		        ]
+		    } );
+
 	} );
 	</script>
 </head>
