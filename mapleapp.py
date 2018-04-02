@@ -13,3 +13,6 @@ def index(user=None):
         user_record= maplebot.get_user_record(user)
         collection = maplebot.export_collection_to_list(user)
     return render_template('index.html',user=user_record,collection=collection)
+
+if __name__ == "__main__":
+    app.run(port=7172)
