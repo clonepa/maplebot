@@ -287,10 +287,10 @@ def export_collection_to_list(user):
     who = get_user_record(user)
     conn = sqlite3.connect('maple.db')
     c = conn.cursor()
-    c.execute("SELECT amount_owned, card_name, card_set, card_type, rarity FROM collection INNER JOIN cards ON collection.multiverse_id = cards.multiverse_id WHERE owner_id = :ownerid", {"ownerid": who[0]})
+    c.execute("SELECT amount_owned, card_name, card_set, card_type, rarity, cards.multiverse_id FROM collection INNER JOIN cards ON collection.multiverse_id = cards.multiverse_id WHERE owner_id = :ownerid", {"ownerid": who[0]})
     out = []
     for card in c.fetchall():
-        out.append( {"amount": card[0], "name": card[1], "set": card[2], "type": card[3], "rarity": card[4]} )
+        out.append( {"amount": card[0], "name": card[1], "set": card[2], "type": card[3], "rarity": card[4], "multiverseid": card[5]} )
     conn.close()
     return out    
 

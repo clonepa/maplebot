@@ -27,7 +27,7 @@
     			}    
          	}
          	if (!foundit) {
-         		dataSet2.push([ {{ card.amount }}, "{{ card.name }}", ["{{ card.set }}"], "{{ card.type }}", "{{ card.rarity }}" ])
+         		dataSet2.push([ {{ card.amount }}, "{{ card.name }}", ["{{ card.set }}"], "{{ card.type }}", "{{ card.rarity }}", {{ card.multiverseid }} ])
          	}
          {% endfor %}
 
@@ -40,12 +40,16 @@
 		            { title: "Name" },
 		            { title: "Set" },
 		            { title: "Type" },
-		            { title: "Rarity" }]
+		            { title: "Rarity" },
+		            { title: "MVerse ID"}]
 
 		    } );
 		    $('#collection tbody').on('click', 'tr', function () {
         		var data = table.row( this ).data();
-        		$("#img-card").attr("src","https://api.scryfall.com/cards/named?fuzzy=!" + encodeURIComponent(data[1]) + "!&format=image");
+        		if (data[5] > 0)
+        			$("#img-card").attr("src","https://api.scryfall.com/cards/multiverse/" + encodeURIComponent(data[5]) + "?format=image");
+        		else
+        			$("#img-card").attr("src","https://api.scryfall.com/cards/named?fuzzy=!" + encodeURIComponent(data[1]) + "!&format=image");
     		} );
 		    {% endif %}
 		} );
