@@ -2,9 +2,12 @@
 <html>
 <head>
 	<title>maplebot back at it</title>
+
 	<script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
 	<script src="//cdn.datatables.net/1.10.16/js/jquery.dataTables.min.js"></script>
+	<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
 	<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.16/css/jquery.dataTables.min.css">
+	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
 	<script>
 		var dataSet = []
 		var dataSet2 = []
@@ -28,30 +31,45 @@
          	}
          {% endfor %}
 
-    	{% endif %}
+    	
 		$(document).ready(function() {
-		    $('#collection').DataTable( {
+		    var table = $('#collection').DataTable( {
 		        data: dataSet2,
 		        columns: [
 		            { title: "Amount" },
 		            { title: "Name" },
 		            { title: "Set" },
 		            { title: "Type" },
-		            { title: "Rarity" }
-		        ]
-		    } );
+		            { title: "Rarity" }]
 
-	} );
+		    } );
+		    $('#collection tbody').on('click', 'tr', function () {
+        		var data = table.row( this ).data();
+        		$("#img-card").attr("src","https://api.scryfall.com/cards/named?fuzzy=!" + encodeURIComponent(data[1]) + "!&format=image");
+    		} );
+		    {% endif %}
+		} );
 	</script>
 </head>
 <body>
-	{% if user %}
-	<h2>{{ user[1] }}</h2>
-	<div style="width:1024px">
-		<table id="collection" class="display" width="100%"></table>
+	<div class="container">
+		{% if user %}
+		<div class="row">
+			<div class="col-md-12">
+				<h2>{{ user[1] }}</h2>
+			</div>
+		</div>
+		<div class="row">
+			<div class="col-md-6">
+				<table id="collection" class="display"></table>
+			</div>
+			<div class="col-md-6">
+				<img id="img-card" style="max-height: 600px; position: fixed" src="https://i.imgur.com/tctVXhW.jpg">
+			</div>
+		</div>
+		{% else %}
+		<h1>back at it again</h1>
+		{% endif %}
 	</div>
-	{% else %}
-	<h1>back at it again</h1>
-	{% endif %}
 </body>
 </html>
