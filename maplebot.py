@@ -17,7 +17,7 @@ client = discord.Client()
 token = mapletoken.get_token()
 mtgox_channel_id = mapletoken.get_mainchannel_id()
 in_transaction = []
-booster_override = {"LEA": 55.00, "LEB": 45.00}
+booster_override = {"LEA": 6999.97, "LEB": 439.95, "3ED": 140.00}
 
 def load_mtgjson():
     with open ('AllSets.json', encoding="utf8") as f:
@@ -33,11 +33,12 @@ def load_mtgjson():
     conn.close()
     return cardobj
 
-def get_booster_price(setname):
+def get_booster_price(card_set):
     conn = sqlite3.connect('maple.db')
     c = conn.cursor()
     c.execute("SELECT * FROM timestamped_base64_strings WHERE name='mtggoldfish'")
     r = c.fetchone()
+    
     if r:
         if r[2] + 86400  < time.time(): #close enough to a day
             goldfish_html = requests.get('https://www.mtggoldfish.com/prices/online/boosters').text
@@ -55,14 +56,20 @@ def get_booster_price(setname):
     
     conn.commit()
     conn.close()  
-    
+
+    set_info = get_set_info(card_set)
+    if set_info:
+        setname = set_info['name']  
     #this is hideous
     regex = r"<a class=\"priceList-set-header-link\" href=\"\/index\/\w+\"><img class=\"[\w\- ]+\" alt=\"\w+\" src=\"[\w.\-\/]+\" \/>\n<\/a><a class=\"priceList-set-header-link\" href=\"[\w\/]+\">{setname}<\/a>[\s\S]*?<div class='priceList-price-price-wrapper'>\n([\d.]+)[\s\S]*?<\/div>".format(setname=setname)
     div_match = re.search(regex, goldfish_html)
-    
-    if (div_match):
+
+    if card_set in booster_override:
+        return booster_override[card_set]
+    elif (div_match):
         return div_match.group(1)
-    return None
+    else:
+        return 3.25
 
 def verify_nick(nick):
     conn = sqlite3.connect('maple.db')
@@ -90,7 +97,7 @@ def calc_elo_change(winner, loser):
 def get_set_info(set_code):
     conn = sqlite3.connect('maple.db')
     c = conn.cursor()
-    c.execute("SELECT * FROM set_map WHERE code=:scode", {"scode":set_code})
+    c.execute("SELECT * FROM set_map WHERE code like :scode", {"scode":set_code})
     r = c.fetchone()
     if r:
         conn.close()
@@ -484,7 +491,7 @@ async def on_message(message):
         setname = get_set_info(card_set)['name']
 
         await client.send_typing(message.channel)       
-        price = get_booster_price(setname)
+        price = get_booster_price(card_set)
         if price:
             out = "{0} booster pack price: ${1}".format(setname, price)
         else:
@@ -554,7 +561,7 @@ async def on_message(message):
         boosters_list = open_booster(user, card_set, amount)
         boosters_opened = len(boosters_list)
         if boosters_opened == 1:
-            await client.send_message(message.channel, "<{0}>\n```{1}```".format(user, boosters_list[0]))
+            await client.send_message(message.channel, "<@{0}>\n```{1}```".format(user, boosters_list[0]))
         elif boosters_opened > 1:
             outstring = "{0} opened {1} boosters by {2}:\n\n".format(boosters_opened, card_set, message.author.display_name)
             for i, booster in enumerate(boosters_list):
@@ -583,14 +590,9 @@ async def on_message(message):
         if not (card_set in cardobj):
             await client.send_message(message.channel, "<@{0}> I don't know what set that is...".format(user))
             return
-        setname = get_set_info(card_set)['name']
-        if card_set in booster_override:
-            price = booster_override[card_set]
-        else:   
-            price = get_booster_price(setname)
-        if not price:
-            price = 3.00
-
+        setname = get_set_info(card_set)['name'] 
+        price = get_booster_price(card_set)
+        
         if check_bux(user) < price:
             await client.send_message(message.channel, "<@{0}> hey idiot why don't you come back with more money".format(user))
             return
