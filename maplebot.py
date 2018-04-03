@@ -17,7 +17,7 @@ client = discord.Client()
 token = mapletoken.get_token()
 mtgox_channel_id = mapletoken.get_mainchannel_id()
 in_transaction = []
-booster_override = {"LEA": 6999.97, "LEB": 439.95, "3ED": 140.00}
+booster_override = {"LEA": 6999.97, "LEB": 2999.95, "2ED": 1499.90, "3ED": 139.95}
 
 def load_mtgjson():
     with open ('AllSets.json', encoding="utf8") as f:
