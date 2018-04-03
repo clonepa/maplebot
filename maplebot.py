@@ -265,7 +265,7 @@ def validate_deck(deckstring, user):
 
     conn = sqlite3.connect('maple.db')
     c = conn.cursor()
-    c.execute("SELECT card_name, amount_owned FROM collection INNER JOIN cards ON collection.multiverse_id = cards.multiverse_id WHERE owner_id=:ownerid", {"ownerid": user})
+    c.execute("SELECT card_name, sum(amount_owned) FROM collection INNER JOIN cards ON collection.multiverse_id = cards.multiverse_id WHERE owner_id=:ownerid GROUP BY card_name", {"ownerid": user})
     collection = c.fetchall()
     conn.close()
     collection = dict((n, a) for n, a in collection) #turn list of tuples to dict in same format as deck
