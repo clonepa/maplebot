@@ -149,7 +149,17 @@ def gen_booster(card_set, seed=0):
         conn.close()
         return gbooster
 
-def give_booster(owner, card_set):
+def give_homie_some_lands(who): #only for new users, not bothering to check if cards in collection
+    conn = sqlite3.connect('maple.db')
+    c = conn.cursor()
+    user_record = get_user_record(who)
+    mvid = [439857, 439859, 439856, 439858, 439860]
+    for i in mvid:
+        c.execute("INSERT OR IGNORE INTO collection VALUES (:name,:mvid,60)", {"name": user_record[0], "mvid": i})
+    conn.commit()
+    conn.close()
+
+def give_booster(owner, card_set, amount=1):
         conn = sqlite3.connect('maple.db')
         c = conn.cursor()
 
@@ -169,9 +179,10 @@ def give_booster(owner, card_set):
         
         c.execute("SELECT discord_id FROM users WHERE name LIKE :name OR discord_id LIKE :name", {"name": owner})
         owner = c.fetchone()[0]
-        random.seed()
-        booster_seed = random.random()
-        c.execute("INSERT INTO booster_inventory VALUES (:owner, :cset, :seed)", {"owner": owner, "cset": card_set, "seed": booster_seed})
+        for i in range(amount):
+            random.seed()
+            booster_seed = random.random()
+            c.execute("INSERT INTO booster_inventory VALUES (:owner, :cset, :seed)", {"owner": owner, "cset": card_set, "seed": booster_seed})
         conn.commit()
         conn.close()
         if outmessage == "":
@@ -202,7 +213,7 @@ def open_booster(owner, card_set, amount):
         row_id = mybooster[3]
         outstring = ""
         for card in generated_booster:
-            c.execute("SELECT * FROM collection WHERE owner_id=:name AND multiverse_id=:mvid AND amount_owned > 0", {"name": owner, "mvid": card[0], "cname": card[1], "cset": card[2] })
+            c.execute("SELECT * FROM collection WHERE owner_id=:name AND multiverse_id=:mvid AND amount_owned > 0", {"name": owner, "mvid": card[0] })
             cr = c.fetchone()
             if not cr:
                 c.execute("INSERT INTO collection VALUES (:name,:mvid,1)", {"name": owner, "mvid": card[0]})
@@ -652,13 +663,14 @@ async def on_message(message):
         else:
             c.execute("INSERT INTO users VALUES ('" + user + "','" + nickname + "',1500,50.00)")
             conn.commit()
-            await client.send_message(message.channel, 'created user in database with ID ' + user + ' and nickname ' + nickname)
-            c.execute("SELECT * FROM users WHERE discord_id='" + user + "'")
-            f = c.fetchone()
-            outstring = "Nickname: " + f[1] + "\nDiscord ID: " + f[0] + "\nElo Rating: " + str(f[2]) + "\nMaplebux: " + str(f[3])
-            await client.send_message(message.channel, outstring)
+            conn.close()
+            
+            give_homie_some_lands(user)
+            give_booster(user, "M13", 15)
+            await client.send_message(message.channel, 'created user in database with ID ' + user + ' and nickname ' + nickname +"!\nI gave homie 60 of each Basic Land and 15 Magic 2013 Booster Packs!!")
         conn.close()
-
+        
+        
     #------------------------------------------------------------------------------------------------------------#
     
     elif message.content.startswith('!changenick') or message.content.startswith('!chamgemick'):
