@@ -608,6 +608,8 @@ async def on_message(message):
             result = give_booster(user, card_set)
         elif (msg.content.startswith('n') or msg.content.startswith('N')):
             result = "well ok"
+        else:
+            result = None
 
         if result:
             await client.send_message(message.channel, "<@{0}> {1}".format(user, result) )
