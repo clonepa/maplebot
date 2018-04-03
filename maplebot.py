@@ -17,6 +17,7 @@ client = discord.Client()
 token = mapletoken.get_token()
 mtgox_channel_id = mapletoken.get_mainchannel_id()
 in_transaction = []
+booster_override = {"LEA": 55.00, "LEB": 45.00}
 
 def load_mtgjson():
     with open ('AllSets.json', encoding="utf8") as f:
@@ -57,8 +58,8 @@ def get_booster_price(setname):
     
     #this is hideous
     regex = r"<a class=\"priceList-set-header-link\" href=\"\/index\/\w+\"><img class=\"[\w\- ]+\" alt=\"\w+\" src=\"[\w.\-\/]+\" \/>\n<\/a><a class=\"priceList-set-header-link\" href=\"[\w\/]+\">{setname}<\/a>[\s\S]*?<div class='priceList-price-price-wrapper'>\n([\d.]+)[\s\S]*?<\/div>".format(setname=setname)
-
     div_match = re.search(regex, goldfish_html)
+    
     if (div_match):
         return div_match.group(1)
     return None
@@ -482,8 +483,7 @@ async def on_message(message):
         card_set = message.content.split(' ')[1].upper()
         setname = get_set_info(card_set)['name']
 
-        await client.send_typing(message.channel)
-
+        await client.send_typing(message.channel)       
         price = get_booster_price(setname)
         if price:
             out = "{0} booster pack price: ${1}".format(setname, price)
@@ -584,10 +584,17 @@ async def on_message(message):
             await client.send_message(message.channel, "<@{0}> I don't know what set that is...".format(user))
             return
         setname = get_set_info(card_set)['name']
-        price = get_booster_price(setname)
+        if card_set in booster_override:
+            price = booster_override[card_set]
+        else:   
+            price = get_booster_price(setname)
         if not price:
-            price = 15.00
+            price = 3.00
 
+        if check_bux(user) < price:
+            await client.send_message(message.channel, "<@{0}> hey idiot why don't you come back with more money".format(user))
+            return
+        
         in_transaction.append(user)    
         await client.send_message(message.channel, "<@{2}> Buy {0} booster for ${1}?".format(setname, '%.2f'%float(price), user))
 
