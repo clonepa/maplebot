@@ -67,7 +67,7 @@ def get_booster_price(card_set):
     if card_set in booster_override:
         return booster_override[card_set]
     elif (div_match):
-        return div_match.group(1)
+        return float(div_match.group(1))
     else:
         return 3.25
 
