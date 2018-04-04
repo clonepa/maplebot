@@ -258,7 +258,11 @@ def load_set_json(card_set):
                 random.seed(card['name'] + card_set)
                 mvid = -random.randrange(100000000)
                 #print('IDless card {0} assigned fallback ID {1}'.format(card['name'], mvid))
-            c.execute("INSERT OR IGNORE INTO cards VALUES(?, ?, ?, ?, ?)", (mvid, card['name'], card_set, card['type'], card['rarity']) )
+            if not 'colors' in card:
+                colors = "Colorless"
+            else:
+                colors = ",".join(card['colors'])
+            c.execute("INSERT OR IGNORE INTO cards VALUES(?, ?, ?, ?, ?, ?, ?)", (mvid, card['name'], card_set, card['type'], card['rarity'], colors, card['cmc']) )
             count += 1
         conn.commit()
         conn.close()
@@ -314,15 +318,15 @@ def export_collection_to_sideboard(user):
     outstring = '\n'.join(['SB: {0} {1}'.format(card[0], card[1]) for card in c.fetchall()])
     conn.close()
     return outstring
-
+            
 def export_collection_to_list(user):
     who = get_user_record(user)
     conn = sqlite3.connect('maple.db')
     c = conn.cursor()
-    c.execute("SELECT amount_owned, card_name, card_set, card_type, rarity, cards.multiverse_id FROM collection INNER JOIN cards ON collection.multiverse_id = cards.multiverse_id WHERE owner_id = :ownerid", {"ownerid": who[0]})
+    c.execute("SELECT amount_owned, card_name, card_set, card_type, rarity, cards.multiverse_id, cards.colors, cards.cmc FROM collection INNER JOIN cards ON collection.multiverse_id = cards.multiverse_id WHERE owner_id = :ownerid", {"ownerid": who[0]})
     out = []
     for card in c.fetchall():
-        out.append( {"amount": card[0], "name": card[1], "set": card[2], "type": card[3], "rarity": card[4], "multiverseid": card[5]} )
+        out.append( {"amount": card[0], "name": card[1], "set": card[2], "type": card[3], "rarity": card[4], "multiverseid": card[5], "color": card[6], "cmc": card[7]} )
     conn.close()
     return out    
 
@@ -801,7 +805,7 @@ async def on_message(message):
                      (winner TEXT, loser TEXT, winner_deckhash TEXT, loser_deckhash TEXT, FOREIGN KEY(winner) REFERENCES users(discord_id), FOREIGN KEY(loser) REFERENCES users(discord_id))''')
 
         c.execute('''CREATE TABLE IF NOT EXISTS cards
-                     (multiverse_id INTEGER PRIMARY KEY, card_name TEXT, card_set TEXT, card_type TEXT, rarity TEXT)''')
+                     (multiverse_id INTEGER PRIMARY KEY, card_name TEXT, card_set TEXT, card_type TEXT, rarity TEXT, colors TEXT, cmc TEXT)''')
         
         c.execute('''CREATE TABLE IF NOT EXISTS collection
                      (owner_id TEXT, multiverse_id INTEGER, amount_owned INTEGER,

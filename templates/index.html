@@ -21,7 +21,7 @@
 		var dataSet2 = []
 		{% if user %}
     	{% for card in collection %}
-    		dataSet.push([ {{ card.amount }}, "{{ card.name }}", "{{ card.set }}", "{{ card.type }}", "{{ card.rarity }}" ])
+    		//dataSet.push([ {{ card.amount }}, "{{ card.name }}", "{{ card.set }}", "{{ card.type }}", "{{ card.rarity }}", "{{ card.color }}" ])
     		//console.log("{{ card.name }}","{{ card.set }}")
 
     		//build combined printings array
@@ -35,7 +35,7 @@
     			}    
          	}
          	if (!foundit) {
-         		dataSet2.push([ {{ card.amount }}, "{{ card.name }}", ["{{ card.set }}"], "{{ card.type }}", "{{ card.rarity }}", {{ card.multiverseid }} ])
+         		dataSet2.push([ {{ card.amount }}, "{{ card.name }}", ["{{ card.set }}"], "{{ card.type }}", "{{ card.rarity }}", "{{ card.color }}", {{ card.multiverseid }} ])
          	}
          {% endfor %}
 
@@ -49,6 +49,7 @@
 		            { title: "Set" },
 		            { title: "Type" },
 		            { title: "Rarity" },
+		            { title: "Color"},
 		            { title: "MVerse ID"}]
 
 		    } );
