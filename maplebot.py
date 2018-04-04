@@ -67,7 +67,7 @@ def get_booster_price(card_set):
     if card_set in booster_override:
         return booster_override[card_set]
     elif (div_match):
-        return div_match.group(1)
+        return float(div_match.group(1))
     else:
         return 3.25
 
@@ -276,7 +276,7 @@ def validate_deck(deckstring, user):
 
     conn = sqlite3.connect('maple.db')
     c = conn.cursor()
-    c.execute("SELECT card_name, amount_owned FROM collection INNER JOIN cards ON collection.multiverse_id = cards.multiverse_id WHERE owner_id=:ownerid", {"ownerid": user})
+    c.execute("SELECT card_name, sum(amount_owned) FROM collection INNER JOIN cards ON collection.multiverse_id = cards.multiverse_id WHERE owner_id=:ownerid GROUP BY card_name", {"ownerid": user})
     collection = c.fetchall()
     conn.close()
     collection = dict((n, a) for n, a in collection) #turn list of tuples to dict in same format as deck
@@ -619,6 +619,8 @@ async def on_message(message):
             result = give_booster(user, card_set)
         elif (msg.content.startswith('n') or msg.content.startswith('N')):
             result = "well ok"
+        else:
+            result = None
 
         if result:
             await client.send_message(message.channel, "<@{0}> {1}".format(user, result) )
