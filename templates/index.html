@@ -49,9 +49,14 @@
 		            { title: "Set" },
 		            { title: "Type" },
 		            { title: "Rarity" },
-		            { title: "Color"} ]
-		            //{ title: "MVerse ID"}]
+		            { title: "Color"},
+		            { title: "MVerse ID"}],
 
+		         "columnDefs": [
+            	{
+                "targets": [ 6 ],
+                "visible": false  
+            	}]
 		    } );
 		    $('#collection tbody').on('click', 'tr', function () {
         		var data = table.row( this ).data();
