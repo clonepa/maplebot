@@ -2,3 +2,4 @@ mapletoken.py
 AllSets.json
 maple.db
 __pycache__/
+rarity_cache.json
