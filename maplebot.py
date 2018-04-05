@@ -19,6 +19,8 @@ mtgox_channel_id = mapletoken.get_mainchannel_id()
 in_transaction = []
 booster_override = {"LEA": 6999.97, "LEB": 2999.95, "2ED": 1499.90, "3ED": 139.95, "ARN": 3500.00}
 
+rarity_cache = collections.defaultdict(str)
+
 def load_mtgjson():
     with open ('AllSets.json', encoding="utf8") as f:
         cardobj = json.load(f)
@@ -105,7 +107,43 @@ def get_set_info(set_code):
     else:
         conn.close()
         return None
-    
+
+def cache_rarities(card_set):
+    '''Adds key to rarity_cache named card_set,
+    which is a dict of format {rarity: [list of multiverse_ids]}.
+    Returns amount of cards cached'''
+    rarity_map = {'Mythic Rare': 'mythic rare',
+                  'Rare': 'rare',
+                  'Uncommon': 'uncommon',
+                  'Common': 'common',
+                  'Basic Land': 'land'}
+
+    cursor = sqlite3.connect('maple.db').cursor()
+
+    set_rarity_dict = collections.defaultdict(list)
+
+    cursor.execute("SELECT rarity, multiverse_id FROM cards WHERE card_set = :card_set",
+                   {"card_set": card_set})
+    cards = cursor.fetchall()
+    cursor.connection.close()
+
+    if not cards:
+        raise Exception('no cards for set {0} found'.format(card_set))
+
+    for card in cards:
+        try:
+            mapped_rarity = rarity_map[card[0]]
+        except KeyError:
+            mapped_rarity = card[0].lower()
+
+        set_rarity_dict[mapped_rarity].append(card[1])
+
+    # turn it back into a normal dict so it can't be modified by calls to nonexisting keys in gen_booster  
+    rarity_cache[card_set] = dict(set_rarity_dict) 
+
+    print(rarity_cache[card_set])
+    return sum([len(set_rarity_dict[rarity]) for rarity in set_rarity_dict])
+
 def gen_booster(card_set, seeds=[{}]):
 
     cardobj = load_mtgjson()
@@ -113,7 +151,7 @@ def gen_booster(card_set, seeds=[{}]):
 
     conn = sqlite3.connect('maple.db')
     c = conn.cursor()
-    rarities = ["rare","mythic rare","uncommon","common","special"]
+    rarities = ["rare","mythic rare","uncommon","common","special","land"]
     other_shit = ["token","marketing"]
     
     if card_set in cardobj:
@@ -127,32 +165,38 @@ def gen_booster(card_set, seeds=[{}]):
                 booster = cardobj[card_set]['booster']
             for i in booster:
                 if isinstance(i, str):
-                    mybooster += [i]
+                    mybooster.append(i)
                 elif isinstance(i, list):
                     if set(i) == {"rare", "mythic rare"}:
-                        mybooster += [random.choice(["rare"] * 7 + ["mythic rare"] * 1)]
+                        mybooster.append(random.choice(["rare"] * 7 + ["mythic rare"] * 1))
                     elif set(i) == {"foil", "power nine"}:
-                        mybooster += [random.choice((["mythic rare"] + ["rare"] * 4 + ["uncommon"] * 6 + ["common"] * 9) * 98 + ["power nine"] * 2)]
+                        mybooster.append(random.choice((["mythic rare"] + ["rare"] * 4 + ["uncommon"] * 6 + ["common"] * 9) * 98 + ["power nine"] * 2))
+                    elif i == "marketing":
+                        mybooster.append("common")
                     else:
-                        mybooster += [random.choice(i)]
-                        
-            gbooster = []        
-            for cd in mybooster:
-                if cd in rarities:
-                    c.execute("SELECT * FROM cards WHERE rarity like :rarity AND card_set LIKE :cardset", {"rarity": cd, "cardset": card_set})
-                elif cd == "land":
-                    c.execute("SELECT * FROM cards WHERE rarity='Basic Land' AND card_set LIKE :cardset", {"cardset": card_set})
-                elif cd == "power nine":
-                    c.execute("SELECT * FROM cards WHERE rarity='Special' AND card_set LIKE :cardset", {"cardset": card_set})
-                elif cd in other_shit:
-                     c.execute("SELECT * FROM cards WHERE rarity like :rarity AND card_set LIKE :cardset", {"rarity": "common", "cardset": card_set})
+                        mybooster.append(random.choice(i))
+
+            if not rarity_cache[card_set]:
+                print(card_set, "rarities not cached, workin on it...")
+                cached_count = cache_rarities(card_set)
+                print("just cached", cached_count, "card rarities from", card_set)
+
+            generated_booster = []
+            for rarity_card in mybooster:
+                if rarity_card in rarities + other_shit:
+                    card_pool = rarity_cache[card_set][rarity_card]
+                elif rarity_card == "power nine":
+                    card_pool = rarity_cache[card_set]["special"]
                 else:
-                    c.execute("SELECT * FROM cards WHERE card_name=:name AND card_set LIKE :cardset", {"name": cd, "cardset": card_set})
-                r_all = c.fetchall()
-                if r_all:
-                    r = random.choice(r_all)
-                    gbooster += [r]        
-            outbooster += [{"rowid": s['rowid'], "booster": gbooster}]
+                    ## this flattens the rarity dict so we get all the cards
+                    card_pool = sorted({x for v in rarity_cache[card_set].values() for x in v})
+                if card_pool:
+                    chosen_card_id = random.choice(card_pool)
+                    c.execute("SELECT multiverse_id, card_name, rarity FROM cards WHERE multiverse_id = :chosen_card_id",
+                              {"chosen_card_id": chosen_card_id})
+                    chosen_card = c.fetchone()
+                    generated_booster.append(chosen_card)
+            outbooster += [{"rowid": s['rowid'], "booster": generated_booster}]
     conn.close()
     return outbooster
     
@@ -225,15 +269,16 @@ def open_booster(owner, card_set, amount):
     for generated_booster in outboosters:
         outstring = ""
         for card in generated_booster['booster']:
-            c.execute("SELECT * FROM collection WHERE owner_id=:name AND multiverse_id=:mvid AND amount_owned > 0", {"name": owner, "mvid": card[0] })
+            c.execute('''SELECT * FROM collection WHERE owner_id=:name 
+                      AND multiverse_id=:mvid AND amount_owned > 0''', 
+                      {"name": owner, "mvid": card[0] })
             cr = c.fetchone()
             if not cr:
                 c.execute("INSERT INTO collection VALUES (:name,:mvid,1)", {"name": owner, "mvid": card[0]})
             else:
                 c.execute("UPDATE collection SET amount_owned = amount_owned + 1 WHERE owner_id=:name AND multiverse_id=:mvid", 
                          {"name": owner, "mvid": card[0]})
-            
-            outstring += card[1] + " -- " + card[4] + "\n"
+            outstring += "{name} -- {rarity}\n".format(name=card[1], rarity=card[2])
             
         if outstring == "":
             outstring = "It was empty... !"
@@ -454,6 +499,31 @@ async def on_message(message):
     user = str(message.author.id)
 
     #------------------------------------------------------------------------------------------------------------#
+    # !register before anything else
+
+    if message.content.startswith('!register'):
+        nickname = message.content.split(' ')[1]
+        conn = sqlite3.connect('maple.db')
+        c = conn.cursor()
+        c.execute('SELECT * FROM users WHERE discord_id=' + user)
+        if (len(c.fetchall()) > 0):
+            await client.send_message(message.channel, 'user with discord ID ' + user + ' already exists. don\'t try to pull a fast one on old maple!!')
+        elif (not verify_nick(nickname)):
+            await client.send_message(message.channel, 'user with nickname ' + nickname + ' already exists. don\'t try to confuse old maple you hear!!')
+        else:
+            c.execute("INSERT INTO users VALUES ('" + user + "','" + nickname + "',1500,50.00)")
+            conn.commit()
+            conn.close()
+            
+            give_homie_some_lands(user)
+            give_booster(user, "M13", 15)
+            await client.send_message(message.channel, 'created user in database with ID ' + user + ' and nickname ' + nickname +"!\nI gave homie 60 of each Basic Land and 15 Magic 2013 Booster Packs!!")
+        conn.close()
+        return       
+        
+    #------------------------------------------------------------------------------------------------------------#
+
+    #------------------------------------------------------------------------------------------------------------#
 
     if message.content.startswith('!givecard'):
         if not is_registered(user):
@@ -483,10 +553,10 @@ async def on_message(message):
     #------------------------------------------------------------------------------------------------------------#
     
     if message.content.startswith('!exportcollection') or message.content.startswith('!exportcollectiom'):
-
         if not is_registered(user):
             await client.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
             return
+
         
         await client.send_typing(message.channel)
         exported_collection = export_collection_to_sideboard(user)
@@ -611,6 +681,11 @@ async def on_message(message):
     #------------------------------------------------------------------------------------------------------------#
         
     elif message.content.startswith('!buybooster') or message.content.startswith('!vuyvooster'):
+        if not is_registered(user):
+            await client.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
+            return
+
+
         if user in in_transaction:
             await client.send_message(message.channel, "<@{0}> you're currently in a transaction! ...guess I'll cancel it for you".format(user))
             in_transaction.remove(user)
@@ -669,28 +744,6 @@ async def on_message(message):
         hashed_thing = deckhash.make_deck_hash(*deckhash.convert_deck_to_boards(thing_to_hash))
         await client.send_message(message.channel, 'hashed deck: ' + hashed_thing)
 
-    #------------------------------------------------------------------------------------------------------------#
-        
-    elif message.content.startswith('!register'):
-        nickname = message.content.split(' ')[1]
-        conn = sqlite3.connect('maple.db')
-        c = conn.cursor()
-        c.execute('SELECT * FROM users WHERE discord_id=' + user)
-        if (len(c.fetchall()) > 0):
-            await client.send_message(message.channel, 'user with discord ID ' + user + ' already exists. don\'t try to pull a fast one on old maple!!')
-        elif (not verify_nick(nickname)):
-            await client.send_message(message.channel, 'user with nickname ' + nickname + ' already exists. don\'t try to confuse old maple you hear!!')
-        else:
-            c.execute("INSERT INTO users VALUES ('" + user + "','" + nickname + "',1500,50.00)")
-            conn.commit()
-            conn.close()
-            
-            give_homie_some_lands(user)
-            give_booster(user, "M13", 15)
-            await client.send_message(message.channel, 'created user in database with ID ' + user + ' and nickname ' + nickname +"!\nI gave homie 60 of each Basic Land and 15 Magic 2013 Booster Packs!!")
-        conn.close()
-        
-        
     #------------------------------------------------------------------------------------------------------------#
     
     elif message.content.startswith('!changenick') or message.content.startswith('!chamgemick'):
@@ -892,9 +945,7 @@ async def on_message(message):
     #------------------------------------------------------------------------------------------------------------#
         
     elif message.content.startswith('!givebooster') or message.content.startswith('!givevooster'):
-        if not is_registered(user):
-            await client.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
-            return
+
         
         card_set = message.content.split(' ')[1].upper()
         if len(message.content.split(' ')) > 2 :
@@ -916,10 +967,12 @@ async def on_message(message):
 
         result = load_set_json(card_set)
         if result > -1:
-            await client.send_message(message.channel, 'added {0} cards from set {1}'.format(result, card_set))
+            await client.send_message(message.channel, 'added {0} cards from set {1}.'.format(result, card_set))
         else:
             await client.send_message(message.channel, 'set code {0} not found'.format(card_set))
 
     #------------------------------------------------------------------------------------------------------------#
+
+
 if __name__ == "__main__":            
     client.run(token)
