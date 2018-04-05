@@ -172,7 +172,7 @@ def cache_rarities(card_set):
 
         set_rarity_dict[mapped_rarity].append(card[1])
 
-    # turn it back into a normal dict so it can't be modified by other functions 
+    # turn it back into a normal dict so it can't be modified by other functions
     # when calling nonexisting keys
     RARITY_CACHE[card_set] = dict(set_rarity_dict)
 
@@ -778,28 +778,38 @@ async def on_message(message):
         if user in IN_TRANSACTION:
             await CLIENT.send_message(message.channel, "<@{0}> you're currently in a transaction! ...guess I'll cancel it for you".format(user))
             IN_TRANSACTION.remove(user)
-        card_set = message.content.split()[1].upper()
+        args = message.content.split(maxsplit=2)[1:] # !buybooster set amount
+        card_set = args[0].upper()
+        amount = int(args[1]) if len(args) == 2 else 1
+
         cardobj = load_mtgjson()
         if card_set not in cardobj:
             await CLIENT.send_message(message.channel,
                                       "<@{0}> I don't know what set that is...".format(user))
             return
+
         setname = get_set_info(card_set)['name']
-        price = get_booster_price(card_set)
+        pack_price = get_booster_price(card_set)
+        price = pack_price * amount
 
         if check_bux(user) < price:
             await CLIENT.send_message(message.channel, "<@{0}> hey idiot why don't you come back with more money".format(user))
             return
 
         IN_TRANSACTION.append(user)
-        await CLIENT.send_message(message.channel, "<@{2}> Buy {0} booster for ${1}?".format(setname, '%.2f'%float(price), user))
+        await CLIENT.send_message(message.channel, "<@{0}> Buy {1} {2} booster{plural} for ${3}?"
+                                  .format(user,
+                                          amount,
+                                          setname,
+                                          '%.2f' % float(price),
+                                          plural=("s" if amount > 1 else "")))
 
         msg = await CLIENT.wait_for_message(timeout=15.0, author=message.author)
         if not msg:
             return
         if (msg.content.startswith('y') or msg.content.startswith('Y')):
             adjustbux(user, float(price) * -1)
-            result = give_booster(user, card_set)
+            result = give_booster(user, card_set, amount)
         elif (msg.content.startswith('n') or msg.content.startswith('N')):
             result = "well ok"
         else:
