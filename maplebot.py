@@ -514,7 +514,7 @@ def give_card(user, target, card, amount):
 
 def make_ptpb(text):
     r = requests.post('https://ptpb.pw/', data={"content": text})
-    return next(i.split(' ')[1] for i in r.text.split('\n') if i.startswith('url:'))
+    return next(i.split()[1] for i in r.text.split('\n') if i.startswith('url:'))
 
 
 @CLIENT.event
@@ -532,7 +532,7 @@ async def on_message(message):
     # !register before anything else
 
     if message.content.startswith('!register'):
-        nickname = message.content.split(' ')[1]
+        nickname = message.content.split()[1]
         conn = sqlite3.connect('maple.db')
         c = conn.cursor()
         c.execute('SELECT * FROM users WHERE discord_id=' + user)
@@ -602,7 +602,7 @@ async def on_message(message):
             await CLIENT.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
             return
 
-        deck = message.content[len(message.content.split(' ')[0]):].strip()
+        deck = message.content[len(message.content.split()[0]):].strip()
         missing_cards = validate_deck(deck, user)
 
         if missing_cards:
@@ -615,7 +615,7 @@ async def on_message(message):
     #------------------------------------------------------------------------------------------------------------#
     
     elif message.content.startswith('!packprice'): #!packprice [setcode] returns mtgo booster pack price for the set via mtggoldfish
-        card_set = message.content.split(' ')[1].upper()
+        card_set = message.content.split()[1].upper()
         setname = get_set_info(card_set)['name']
 
         await CLIENT.send_typing(message.channel)       
@@ -635,8 +635,8 @@ async def on_message(message):
     #------------------------------------------------------------------------------------------------------------#
 
     elif message.content.startswith('!givebux') or message.content.startswith('!givevux'):
-            p1 = message.content.split(' ')[1]
-            p2 = float('%.2f'%float(message.content.split(' ')[2]))
+            p1 = message.content.split()[1]
+            p2 = float('%.2f'%float(message.content.split()[2]))
             myself = user
             mycash = check_bux(myself)
             otherperson = ""
@@ -704,7 +704,7 @@ async def on_message(message):
     #------------------------------------------------------------------------------------------------------------#
     
     elif message.content.startswith("!maplecard"):
-        cname = message.content[len(message.content.split(' ')[0]):]
+        cname = message.content[len(message.content.split()[0]):]
         cname = cname.replace(" ","%20")
         await CLIENT.send_message(message.channel, "https://api.scryfall.com/cards/named?fuzzy=!" + cname + "!&format=image")
 
@@ -719,7 +719,7 @@ async def on_message(message):
         if user in IN_TRANSACTION:
             await CLIENT.send_message(message.channel, "<@{0}> you're currently in a transaction! ...guess I'll cancel it for you".format(user))
             IN_TRANSACTION.remove(user)
-        card_set = message.content.split(' ')[1].upper()
+        card_set = message.content.split()[1].upper()
         cardobj = load_mtgjson()
         if not (card_set in cardobj):
             await CLIENT.send_message(message.channel, "<@{0}> I don't know what set that is...".format(user))
@@ -752,8 +752,7 @@ async def on_message(message):
     #------------------------------------------------------------------------------------------------------------#
                                           
     elif message.content.startswith('!recordmatch'):
-        p1 = message.content.split(' ')[1]
-        p2 = message.content.split(' ')[2]
+        p1, p2 = message.content.split()[1:]
         p1elo = get_user_record(p1,"elo_rating")[0]
         p2elo = get_user_record(p2,"elo_rating")[0]
 
@@ -770,7 +769,7 @@ async def on_message(message):
     #------------------------------------------------------------------------------------------------------------#
         
     elif message.content.startswith('!hash'):
-        thing_to_hash = message.content[len(message.content.split(' ')[0]):]
+        thing_to_hash = message.content[len(message.content.split()[0]):]
         hashed_thing = deckhash.make_deck_hash(*deckhash.convert_deck_to_boards(thing_to_hash))
         await CLIENT.send_message(message.channel, 'hashed deck: ' + hashed_thing)
 
@@ -781,7 +780,7 @@ async def on_message(message):
             await CLIENT.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
             return
 
-        nickname = message.content.split(' ')[1]
+        nickname = message.content.split()[1]
         if (not verify_nick(nickname)):
             await CLIENT.send_message(message.channel, 'user with nickname ' + nickname + ' already exists. don\'t try to confuse old maple you hear!!')
         else:
@@ -814,7 +813,7 @@ async def on_message(message):
     #------------------------------------------------------------------------------------------------------------#
         
     elif message.content.startswith('!query'):
-        query = message.content[len(message.content.split(' ')[0]):]
+        query = message.content[len(message.content.split()[0]):]
         conn = sqlite3.connect('maple.db')
         c = conn.cursor()
         if ('DROP' in query.upper() and user != '234042140248899587'):
@@ -840,8 +839,8 @@ async def on_message(message):
     #------------------------------------------------------------------------------------------------------------#
         
     elif message.content.startswith('!elotest'):
-        w = int(message.content.split(' ')[1])
-        l = int(message.content.split(' ')[2])
+        w = int(message.content.split()[1])
+        l = int(message.content.split()[2])
         new_r = calc_elo_change(w,l)
         await CLIENT.send_message(message.channel, "```old winner rating: " + str(w) + "\nold loser rating: " + str(l) + "\n\nnew winner rating: " + str(new_r[0])  + "\nnew loser rating: " + str(new_r[1]) + "```")
         
@@ -849,10 +848,10 @@ async def on_message(message):
         
     elif message.content.startswith('!gutdump'):
         table = ""
-        if len(message.content.split(' ')) < 2:
+        if len(message.content.split()) < 2:
             table = "users"
         else:
-            table = message.content.split(' ')[1]
+            table = message.content.split()[1]
             
         if table == "maple":
             with open(__file__) as f:
@@ -954,8 +953,8 @@ async def on_message(message):
     #------------------------------------------------------------------------------------------------------------#
         
     elif message.content.startswith('!debugbooster') or message.content.startswith('!devugvooster'):
-        card_set = message.content.split(' ')[1].upper()
-        seed = float(message.content.split(' ')[2])
+        card_set = message.content.split()[1].upper()
+        seed = float(message.content.split()[2])
         await CLIENT.send_message(message.channel, "```" + str(gen_booster(card_set,seed)) + "```" )
         
         
@@ -967,8 +966,8 @@ async def on_message(message):
     #------------------------------------------------------------------------------------------------------------#
         
     elif message.content.startswith('!adjustbux') or message.content.startswith('!adjustvux'):
-        p1 = message.content.split(' ')[1]
-        p2 = float(message.content.split(' ')[2])
+        p1 = message.content.split()[1]
+        p2 = float(message.content.split()[2])
         adjustbux(p1, p2)
         await CLIENT.send_message(message.channel, "updated bux")
         
@@ -977,11 +976,11 @@ async def on_message(message):
     elif message.content.startswith('!givebooster') or message.content.startswith('!givevooster'):
 
         
-        card_set = message.content.split(' ')[1].upper()
-        if len(message.content.split(' ')) > 2 :
-            person_getting_booster = message.content.split(' ')[2]
-        if len(message.content.split(' ')) > 3 :
-            amount = int(message.content.split(' ')[3])
+        card_set = message.content.split()[1].upper()
+        if len(message.content.split()) > 2 :
+            person_getting_booster = message.content.split()[2]
+        if len(message.content.split()) > 3 :
+            amount = int(message.content.split()[3])
         else:
             amount = 1
             person_getting_booster = user
@@ -993,7 +992,7 @@ async def on_message(message):
     #------------------------------------------------------------------------------------------------------------#
     
     elif message.content.startswith('!loadsetjson') or message.content.startswith('!loadsetjsom'):
-        card_set = message.content.split(' ')[1].upper()
+        card_set = message.content.split()[1].upper()
 
         result = load_set_json(card_set)
         if result > -1:
