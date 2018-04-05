@@ -1,29 +1,44 @@
-import discord
 import asyncio
-import deckhash
 import sqlite3
 import math
 import sys
-import mapletoken
 import random
 import json
-import requests
 import re
 import time
 import base64
 import collections
 
-client = discord.Client()
-token = mapletoken.get_token()
-mtgox_channel_id = mapletoken.get_mainchannel_id()
-in_transaction = []
-booster_override = {"LEA": 6999.97, "LEB": 2999.95, "2ED": 1499.90, "3ED": 139.95, "ARN": 3500.00}
+import requests
+import discord
 
-rarity_cache = collections.defaultdict(str)
+import deckhash
+import mapletoken
+
+
+CLIENT = discord.Client()
+TOKEN = mapletoken.get_token()
+MTGOX_CHANNEL_ID = mapletoken.get_mainchannel_id()
+IN_TRANSACTION = []
+
+BOOSTER_OVERRIDE = {"LEA": 6999.97, "LEB": 2999.95, "2ED": 1499.90, "3ED": 139.95, "ARN": 3500.00}
+
+print('Loading rarity cache...')
+try:
+    with open('rarity_cache.json', 'r') as infile:
+        RARITY_CACHE = collections.defaultdict(str, json.load(infile))
+    print('Loaded rarity cache with {sets} sets'.format(sets=len(RARITY_CACHE)))
+except FileNotFoundError:
+    print('No rarity cache found')
+    RARITY_CACHE = collections.defaultdict(str)
+
+
+
+
 
 def load_mtgjson():
-    with open ('AllSets.json', encoding="utf8") as f:
-        cardobj = json.load(f)
+    with open ('AllSets.json', encoding="utf8") as infile:
+        cardobj = json.load(infile)
     #force set codes to caps
     conn = sqlite3.connect('maple.db')
     c = conn.cursor()
@@ -66,8 +81,8 @@ def get_booster_price(card_set):
     regex = r"<a class=\"priceList-set-header-link\" href=\"\/index\/\w+\"><img class=\"[\w\- ]+\" alt=\"\w+\" src=\"[\w.\-\/]+\" \/>\n<\/a><a class=\"priceList-set-header-link\" href=\"[\w\/]+\">{setname}<\/a>[\s\S]*?<div class='priceList-price-price-wrapper'>\n([\d.]+)[\s\S]*?<\/div>".format(setname=setname)
     div_match = re.search(regex, goldfish_html)
 
-    if card_set in booster_override:
-        return booster_override[card_set]
+    if card_set in BOOSTER_OVERRIDE:
+        return BOOSTER_OVERRIDE[card_set]
     elif (div_match):
         return float(div_match.group(1))
     else:
@@ -109,7 +124,7 @@ def get_set_info(set_code):
         return None
 
 def cache_rarities(card_set):
-    '''Adds key to rarity_cache named card_set,
+    '''Adds key to RARITY_CACHE named card_set,
     which is a dict of format {rarity: [list of multiverse_ids]}.
     Returns amount of cards cached'''
     rarity_map = {'Mythic Rare': 'mythic rare',
@@ -139,19 +154,33 @@ def cache_rarities(card_set):
         set_rarity_dict[mapped_rarity].append(card[1])
 
     # turn it back into a normal dict so it can't be modified by calls to nonexisting keys in gen_booster  
-    rarity_cache[card_set] = dict(set_rarity_dict) 
+    RARITY_CACHE[card_set] = dict(set_rarity_dict) 
 
-    print(rarity_cache[card_set])
-    return sum([len(set_rarity_dict[rarity]) for rarity in set_rarity_dict])
 
-def gen_booster(card_set, seeds=[{}]):
+    cached_count = sum([len(set_rarity_dict[rarity]) for rarity in set_rarity_dict])
+    print("just cached", cached_count, "card rarities from", card_set)
+    print("saving cache to disk...")
+    with open('rarity_cache.json', 'w') as outfile:
+        json.dump(RARITY_CACHE, outfile)
+    print("saved cache with {sets} sets".format(sets=len(RARITY_CACHE)))
+
+    return cached_count
+
+def gen_booster(card_set, seeds=[{}], conn=None):
+
+    genbooster_benchmark_time = time.time()
+    if not conn:
+        conn = sqlite3.connect('maple.db')
+        self_conn = True
+    else:
+        self_conn = False
 
     cardobj = load_mtgjson()
     outbooster = []
 
     conn = sqlite3.connect('maple.db')
     c = conn.cursor()
-    rarities = ["rare","mythic rare","uncommon","common","special","land"]
+    rarities = ["rare", "mythic rare", "uncommon", "common", "special", "land"]
     other_shit = ["token","marketing"]
     
     if card_set in cardobj:
@@ -171,25 +200,24 @@ def gen_booster(card_set, seeds=[{}]):
                         mybooster.append(random.choice(["rare"] * 7 + ["mythic rare"] * 1))
                     elif set(i) == {"foil", "power nine"}:
                         mybooster.append(random.choice((["mythic rare"] + ["rare"] * 4 + ["uncommon"] * 6 + ["common"] * 9) * 98 + ["power nine"] * 2))
-                    elif i == "marketing":
-                        mybooster.append("common")
                     else:
                         mybooster.append(random.choice(i))
 
-            if not rarity_cache[card_set]:
+            if not RARITY_CACHE[card_set]:
                 print(card_set, "rarities not cached, workin on it...")
-                cached_count = cache_rarities(card_set)
-                print("just cached", cached_count, "card rarities from", card_set)
+                cache_rarities(card_set)
 
             generated_booster = []
             for rarity_card in mybooster:
-                if rarity_card in rarities + other_shit:
-                    card_pool = rarity_cache[card_set][rarity_card]
+                if rarity_card in rarities:
+                    card_pool = RARITY_CACHE[card_set][rarity_card]
                 elif rarity_card == "power nine":
-                    card_pool = rarity_cache[card_set]["special"]
+                    card_pool = RARITY_CACHE[card_set]["special"]
+                elif rarity_card in other_shit:
+                    card_pool = RARITY_CACHE[card_set]["common"]
                 else:
                     ## this flattens the rarity dict so we get all the cards
-                    card_pool = sorted({x for v in rarity_cache[card_set].values() for x in v})
+                    card_pool = sorted({x for v in RARITY_CACHE[card_set].values() for x in v})
                 if card_pool:
                     chosen_card_id = random.choice(card_pool)
                     c.execute("SELECT multiverse_id, card_name, rarity FROM cards WHERE multiverse_id = :chosen_card_id",
@@ -198,6 +226,7 @@ def gen_booster(card_set, seeds=[{}]):
                     generated_booster.append(chosen_card)
             outbooster += [{"rowid": s['rowid'], "booster": generated_booster}]
     conn.close()
+    print("gen_booster time:", time.time() - genbooster_benchmark_time, "for",len(seeds),"packs")
     return outbooster
     
 def give_homie_some_lands(who): #only for new users, not bothering to check if cards in collection
@@ -252,7 +281,7 @@ def adjustbux(who, how_much):
 
 def open_booster(owner, card_set, amount):
     opened_boosters = []
-
+    openbooster_benchmark_time = time.time()
     conn = sqlite3.connect('maple.db')
     c = conn.cursor()
     c.execute("SELECT *, rowid FROM booster_inventory WHERE owner_id=:name AND card_set LIKE :set LIMIT :amount",
@@ -264,7 +293,7 @@ def open_booster(owner, card_set, amount):
     seed_list = []
     for mybooster in boosters:
         seed_list += [{"rowid": mybooster[3], "seed": mybooster[2]}]
-    outboosters = gen_booster(card_set, seed_list)
+    outboosters = gen_booster(card_set, seed_list, conn)
     
     for generated_booster in outboosters:
         outstring = ""
@@ -286,6 +315,7 @@ def open_booster(owner, card_set, amount):
         opened_boosters.append(outstring)
     conn.commit()
     conn.close()
+    print("open_booster time:",time.time() - openbooster_benchmark_time,"for",amount,"packs")
     return opened_boosters
 
 def load_set_json(card_set):
@@ -487,14 +517,14 @@ def make_ptpb(text):
     return next(i.split(' ')[1] for i in r.text.split('\n') if i.startswith('url:'))
 
 
-@client.event
+@CLIENT.event
 async def on_ready():
     print('Logged in as')
-    print(client.user.name)
-    print(client.user.id)
+    print(CLIENT.user.name)
+    print(CLIENT.user.id)
     print('------')
 
-@client.event
+@CLIENT.event
 async def on_message(message):
     user = str(message.author.id)
 
@@ -507,9 +537,9 @@ async def on_message(message):
         c = conn.cursor()
         c.execute('SELECT * FROM users WHERE discord_id=' + user)
         if (len(c.fetchall()) > 0):
-            await client.send_message(message.channel, 'user with discord ID ' + user + ' already exists. don\'t try to pull a fast one on old maple!!')
+            await CLIENT.send_message(message.channel, 'user with discord ID ' + user + ' already exists. don\'t try to pull a fast one on old maple!!')
         elif (not verify_nick(nickname)):
-            await client.send_message(message.channel, 'user with nickname ' + nickname + ' already exists. don\'t try to confuse old maple you hear!!')
+            await CLIENT.send_message(message.channel, 'user with nickname ' + nickname + ' already exists. don\'t try to confuse old maple you hear!!')
         else:
             c.execute("INSERT INTO users VALUES ('" + user + "','" + nickname + "',1500,50.00)")
             conn.commit()
@@ -517,7 +547,7 @@ async def on_message(message):
             
             give_homie_some_lands(user)
             give_booster(user, "M13", 15)
-            await client.send_message(message.channel, 'created user in database with ID ' + user + ' and nickname ' + nickname +"!\nI gave homie 60 of each Basic Land and 15 Magic 2013 Booster Packs!!")
+            await CLIENT.send_message(message.channel, 'created user in database with ID ' + user + ' and nickname ' + nickname +"!\nI gave homie 60 of each Basic Land and 15 Magic 2013 Booster Packs!!")
         conn.close()
         return       
         
@@ -527,7 +557,7 @@ async def on_message(message):
 
     if message.content.startswith('!givecard'):
         if not is_registered(user):
-            await client.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
+            await CLIENT.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
             return
 
         #format: !givecard clonepa Swamp 2
@@ -548,28 +578,28 @@ async def on_message(message):
                       4: "now that's just silly",
                       5: "you only have {0} of that printing of {1}!".format(result_dict['amount_owned'], result_dict['card_name'])}
 
-        await client.send_message(message.channel, "<@{0}> {1}".format(user, reply_dict[ result_dict['code'] ]))
+        await CLIENT.send_message(message.channel, "<@{0}> {1}".format(user, reply_dict[ result_dict['code'] ]))
 
     #------------------------------------------------------------------------------------------------------------#
     
     if message.content.startswith('!exportcollection') or message.content.startswith('!exportcollectiom'):
         if not is_registered(user):
-            await client.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
+            await CLIENT.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
             return
 
         
-        await client.send_typing(message.channel)
+        await CLIENT.send_typing(message.channel)
         exported_collection = export_collection_to_sideboard(user)
 
         pb_url = make_ptpb(exported_collection)
 
-        await client.send_message(message.channel, "<@{0}>, here's your exported collection: {1}\ncopy it into cockatrice to build a deck!!".format(user, pb_url))
+        await CLIENT.send_message(message.channel, "<@{0}>, here's your exported collection: {1}\ncopy it into cockatrice to build a deck!!".format(user, pb_url))
 
     #------------------------------------------------------------------------------------------------------------#
  
     elif message.content.startswith('!checkdeck'):
         if not is_registered(user):
-            await client.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
+            await CLIENT.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
             return
 
         deck = message.content[len(message.content.split(' ')[0]):].strip()
@@ -577,10 +607,10 @@ async def on_message(message):
 
         if missing_cards:
             needed_cards_str = '\n'.join(["{0} {1}".format(missing_cards[card], card) for card in missing_cards])
-            await client.send_message(message.channel, "<@{0}>, you don't have the cards for that deck!! You need:\n```{1}```".format(user, needed_cards_str))
+            await CLIENT.send_message(message.channel, "<@{0}>, you don't have the cards for that deck!! You need:\n```{1}```".format(user, needed_cards_str))
         else:
             hashed_deck = deckhash.make_deck_hash(*deckhash.convert_deck_to_boards(deck))
-            await client.send_message(client.get_channel(mtgox_channel_id), "<@{0}> has submitted a collection-valid deck! hash: `{1}`".format(user, hashed_deck))
+            await CLIENT.send_message(CLIENT.get_channel(MTGOX_CHANNEL_ID), "<@{0}> has submitted a collection-valid deck! hash: `{1}`".format(user, hashed_deck))
 
     #------------------------------------------------------------------------------------------------------------#
     
@@ -588,19 +618,19 @@ async def on_message(message):
         card_set = message.content.split(' ')[1].upper()
         setname = get_set_info(card_set)['name']
 
-        await client.send_typing(message.channel)       
+        await CLIENT.send_typing(message.channel)       
         price = get_booster_price(card_set)
         if price:
             out = "{0} booster pack price: ${1}".format(setname, price)
         else:
             out = "no prices found for that set brah"
 
-        await client.send_message(message.channel, out)
+        await CLIENT.send_message(message.channel, out)
 
     #------------------------------------------------------------------------------------------------------------#
     
     elif message.content.startswith('!checkbux') or message.content.startswith('!checkvux'):
-        await client.send_message(message.channel, "<@{0}> your maplebux balance is: ${1}".format(user, '%.2f'%check_bux(user)))
+        await CLIENT.send_message(message.channel, "<@{0}> your maplebux balance is: ${1}".format(user, '%.2f'%check_bux(user)))
 
     #------------------------------------------------------------------------------------------------------------#
 
@@ -617,32 +647,32 @@ async def on_message(message):
             if result:
                 otherperson = result[0]
             else:
-                await client.send_message(message.channel, "I'm not sure who you're trying to give money to...")
+                await CLIENT.send_message(message.channel, "I'm not sure who you're trying to give money to...")
                 return
 
             c.execute("SELECT name FROM users WHERE discord_id=:who OR name=:who", {"who":myself} )
             result = c.fetchone()
             if result:
                 if result[0] == otherperson:
-                    await client.send_message(message.channel, "sending money to yourself... that's shady...")
+                    await CLIENT.send_message(message.channel, "sending money to yourself... that's shady...")
                     return
                
             if p2 < 0:
-                await client.send_message(message.channel, "wait a minute that's a robbery!")
+                await CLIENT.send_message(message.channel, "wait a minute that's a robbery!")
                 return
             if mycash == 0 or mycash - p2 < 0:
-                await client.send_message(message.channel, "not enough bux to ride this trux :surfer:")
+                await CLIENT.send_message(message.channel, "not enough bux to ride this trux :surfer:")
                 return
             adjustbux(myself, p2 * -1)
             adjustbux(otherperson, p2)
-            await client.send_message(message.channel, "sent ${0} to {1}".format(p2, p1))
+            await CLIENT.send_message(message.channel, "sent ${0} to {1}".format(p2, p1))
             conn.close()
 
     #------------------------------------------------------------------------------------------------------------#
     
     elif message.content.startswith('!openbooster') or message.content.startswith('!opemvooster'):
         if not is_registered(user):
-            await client.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
+            await CLIENT.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
             return
 
         args = message.content.split(maxsplit=2)[1:]
@@ -651,60 +681,60 @@ async def on_message(message):
         elif (args[1].isdigit()):
             amount = int(args[1])
         else:
-            await client.send_message(message.channel, "<@{0}> that's nonsense bro!!".format(user))
+            await CLIENT.send_message(message.channel, "<@{0}> that's nonsense bro!!".format(user))
             return
         card_set = args[0].upper()
 
-        await client.send_typing(message.channel)
+        await CLIENT.send_typing(message.channel)
         boosters_list = open_booster(user, card_set, amount)
         boosters_opened = len(boosters_list)
         print (boosters_opened)
         if boosters_opened == 1:
-            await client.send_message(message.channel, "<@{0}>\n```{1}```".format(user, boosters_list[0]))
+            await CLIENT.send_message(message.channel, "<@{0}>\n```{1}```".format(user, boosters_list[0]))
         elif boosters_opened > 1:
             outstring = "{0} opened {1} boosters by {2}:\n\n".format(boosters_opened, card_set, message.author.display_name)
             for i, booster in enumerate(boosters_list):
                 outstring += "------- Booster #{0} -------\n".format(i + 1)
                 outstring += booster + '\n'
             pb_url = make_ptpb(outstring)
-            await client.send_message(message.channel, "<@{0}>, your {1} opened {2} boosters: {3}".format(user, boosters_opened, card_set, pb_url))                        
+            await CLIENT.send_message(message.channel, "<@{0}>, your {1} opened {2} boosters: {3}".format(user, boosters_opened, card_set, pb_url))                        
         else:
-            await client.send_message(message.channel, "<@{0}> don't have any of those homie!!".format(user))
+            await CLIENT.send_message(message.channel, "<@{0}> don't have any of those homie!!".format(user))
 
     #------------------------------------------------------------------------------------------------------------#
     
     elif message.content.startswith("!maplecard"):
         cname = message.content[len(message.content.split(' ')[0]):]
         cname = cname.replace(" ","%20")
-        await client.send_message(message.channel, "https://api.scryfall.com/cards/named?fuzzy=!" + cname + "!&format=image")
+        await CLIENT.send_message(message.channel, "https://api.scryfall.com/cards/named?fuzzy=!" + cname + "!&format=image")
 
     #------------------------------------------------------------------------------------------------------------#
         
     elif message.content.startswith('!buybooster') or message.content.startswith('!vuyvooster'):
         if not is_registered(user):
-            await client.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
+            await CLIENT.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
             return
 
 
-        if user in in_transaction:
-            await client.send_message(message.channel, "<@{0}> you're currently in a transaction! ...guess I'll cancel it for you".format(user))
-            in_transaction.remove(user)
+        if user in IN_TRANSACTION:
+            await CLIENT.send_message(message.channel, "<@{0}> you're currently in a transaction! ...guess I'll cancel it for you".format(user))
+            IN_TRANSACTION.remove(user)
         card_set = message.content.split(' ')[1].upper()
         cardobj = load_mtgjson()
         if not (card_set in cardobj):
-            await client.send_message(message.channel, "<@{0}> I don't know what set that is...".format(user))
+            await CLIENT.send_message(message.channel, "<@{0}> I don't know what set that is...".format(user))
             return
         setname = get_set_info(card_set)['name'] 
         price = get_booster_price(card_set)
         
         if check_bux(user) < price:
-            await client.send_message(message.channel, "<@{0}> hey idiot why don't you come back with more money".format(user))
+            await CLIENT.send_message(message.channel, "<@{0}> hey idiot why don't you come back with more money".format(user))
             return
         
-        in_transaction.append(user)    
-        await client.send_message(message.channel, "<@{2}> Buy {0} booster for ${1}?".format(setname, '%.2f'%float(price), user))
+        IN_TRANSACTION.append(user)    
+        await CLIENT.send_message(message.channel, "<@{2}> Buy {0} booster for ${1}?".format(setname, '%.2f'%float(price), user))
 
-        msg = await client.wait_for_message(timeout=15.0, author=message.author)
+        msg = await CLIENT.wait_for_message(timeout=15.0, author=message.author)
         if not msg:
             return
         if (msg.content.startswith('y') or msg.content.startswith('Y')):
@@ -716,8 +746,8 @@ async def on_message(message):
             result = None
 
         if result:
-            await client.send_message(message.channel, "<@{0}> {1}".format(user, result) )
-        in_transaction.remove(user)
+            await CLIENT.send_message(message.channel, "<@{0}> {1}".format(user, result) )
+        IN_TRANSACTION.remove(user)
 
     #------------------------------------------------------------------------------------------------------------#
                                           
@@ -735,38 +765,38 @@ async def on_message(message):
         update_elo(p2, newelo[1])
 
         adjustbux(p1, bux_adjustment)
-        await client.send_message(message.channel,"" + p1 + " new elo: " + str(newelo[0]) + "\n" + p2 + " new elo: " + str(newelo[1]) + "\npayout: $" + str(bux_adjustment))           
+        await CLIENT.send_message(message.channel,"" + p1 + " new elo: " + str(newelo[0]) + "\n" + p2 + " new elo: " + str(newelo[1]) + "\npayout: $" + str(bux_adjustment))           
 
     #------------------------------------------------------------------------------------------------------------#
         
     elif message.content.startswith('!hash'):
         thing_to_hash = message.content[len(message.content.split(' ')[0]):]
         hashed_thing = deckhash.make_deck_hash(*deckhash.convert_deck_to_boards(thing_to_hash))
-        await client.send_message(message.channel, 'hashed deck: ' + hashed_thing)
+        await CLIENT.send_message(message.channel, 'hashed deck: ' + hashed_thing)
 
     #------------------------------------------------------------------------------------------------------------#
     
     elif message.content.startswith('!changenick') or message.content.startswith('!chamgemick'):
         if not is_registered(user):
-            await client.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
+            await CLIENT.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
             return
 
         nickname = message.content.split(' ')[1]
         if (not verify_nick(nickname)):
-            await client.send_message(message.channel, 'user with nickname ' + nickname + ' already exists. don\'t try to confuse old maple you hear!!')
+            await CLIENT.send_message(message.channel, 'user with nickname ' + nickname + ' already exists. don\'t try to confuse old maple you hear!!')
         else:
             conn = sqlite3.connect('maple.db')
             c = conn.cursor()
             c.execute("UPDATE users SET name='" + nickname + "' WHERE discord_id='" + user + "'")
             conn.commit()
-            await client.send_message(message.channel, message.author.mention + " updated nickname")
+            await CLIENT.send_message(message.channel, message.author.mention + " updated nickname")
             conn.close()
 
     #------------------------------------------------------------------------------------------------------------#
             
     elif message.content.startswith('!userinfo') or message.content.startswith('!userimfo'):
         if not is_registered(user):
-            await client.send_message(message.channel, "<@{0}>, you aren't registered!! :surfer:".format(user))
+            await CLIENT.send_message(message.channel, "<@{0}>, you aren't registered!! :surfer:".format(user))
             return
 
         conn = sqlite3.connect('maple.db')
@@ -774,7 +804,7 @@ async def on_message(message):
         c.execute("SELECT * FROM users WHERE discord_id='" + user + "'")
         f = c.fetchone()
         outstring = "Nickname: " + f[1] + "\nDiscord ID: " + f[0] + "\nElo Rating: " + str(f[2]) + "\nMaplebux: " + str(f[3])
-        await client.send_message(message.channel, outstring)
+        await CLIENT.send_message(message.channel, outstring)
         conn.close()
         
     ##############################################################################################################    
@@ -788,14 +818,14 @@ async def on_message(message):
         conn = sqlite3.connect('maple.db')
         c = conn.cursor()
         if ('DROP' in query.upper() and user != '234042140248899587'):
-            await client.send_message(message.channel,"pwease no droppy u_u")
+            await CLIENT.send_message(message.channel,"pwease no droppy u_u")
             return
         outstring = ""
         try:
             c.execute(query)
             for i in c.fetchall():
                 if len(outstring) > 1500:
-                    await client.send_message(message.channel,"```" + outstring + "\n```")
+                    await CLIENT.send_message(message.channel,"```" + outstring + "\n```")
                     outstring = ""
                 outstring += str(i) + "\n"
         except sqlite3.OperationalError:
@@ -803,7 +833,7 @@ async def on_message(message):
             
         if outstring == "":
             outstring = "No output so it probably worked"
-        await client.send_message(message.channel,"```" + outstring + "```")
+        await CLIENT.send_message(message.channel,"```" + outstring + "```")
         conn.commit()
         conn.close()
         
@@ -813,7 +843,7 @@ async def on_message(message):
         w = int(message.content.split(' ')[1])
         l = int(message.content.split(' ')[2])
         new_r = calc_elo_change(w,l)
-        await client.send_message(message.channel, "```old winner rating: " + str(w) + "\nold loser rating: " + str(l) + "\n\nnew winner rating: " + str(new_r[0])  + "\nnew loser rating: " + str(new_r[1]) + "```")
+        await CLIENT.send_message(message.channel, "```old winner rating: " + str(w) + "\nold loser rating: " + str(l) + "\n\nnew winner rating: " + str(new_r[0])  + "\nnew loser rating: " + str(new_r[1]) + "```")
         
     #------------------------------------------------------------------------------------------------------------#
         
@@ -828,7 +858,7 @@ async def on_message(message):
             with open(__file__) as f:
                 out = f.read(1024)
                 while (out):
-                    await client.send_message(message.channel,"```"  + out.replace("```","[codeblock]") + "```")
+                    await CLIENT.send_message(message.channel,"```"  + out.replace("```","[codeblock]") + "```")
                     out = f.read(1024)
                     await asyncio.sleep(0.25)
             return
@@ -839,11 +869,11 @@ async def on_message(message):
         names = [description[0] for description in c.description]
         for i in c.fetchall():
             if len(outstring) > 1500:
-                await client.send_message(message.channel,"```" + str(names) + "\n\n" + outstring + "\n```")
+                await CLIENT.send_message(message.channel,"```" + str(names) + "\n\n" + outstring + "\n```")
                 outstring = ""
             outstring += str(i) + "\n"
         if len(outstring) > 0:
-            await client.send_message(message.channel,"```" + str(names) + "\n\n" + outstring + "\n```")
+            await CLIENT.send_message(message.channel,"```" + str(names) + "\n\n" + outstring + "\n```")
         conn.close()
         
     #------------------------------------------------------------------------------------------------------------#
@@ -926,13 +956,13 @@ async def on_message(message):
     elif message.content.startswith('!debugbooster') or message.content.startswith('!devugvooster'):
         card_set = message.content.split(' ')[1].upper()
         seed = float(message.content.split(' ')[2])
-        await client.send_message(message.channel, "```" + str(gen_booster(card_set,seed)) + "```" )
+        await CLIENT.send_message(message.channel, "```" + str(gen_booster(card_set,seed)) + "```" )
         
         
     #------------------------------------------------------------------------------------------------------------#
         
     elif message.content.startswith('!mapletest'):
-        await client.send_message(message.channel, 'i\'m {0} and my guts are made of python 3.6, brah :surfer:'.format(client.user.name))
+        await CLIENT.send_message(message.channel, 'i\'m {0} and my guts are made of python 3.6, brah :surfer:'.format(CLIENT.user.name))
         
     #------------------------------------------------------------------------------------------------------------#
         
@@ -940,7 +970,7 @@ async def on_message(message):
         p1 = message.content.split(' ')[1]
         p2 = float(message.content.split(' ')[2])
         adjustbux(p1, p2)
-        await client.send_message(message.channel, "updated bux")
+        await CLIENT.send_message(message.channel, "updated bux")
         
     #------------------------------------------------------------------------------------------------------------#
         
@@ -958,7 +988,7 @@ async def on_message(message):
             
         
         result = give_booster(person_getting_booster, card_set, amount)
-        await client.send_message(message.channel, result )
+        await CLIENT.send_message(message.channel, result )
         
     #------------------------------------------------------------------------------------------------------------#
     
@@ -967,12 +997,12 @@ async def on_message(message):
 
         result = load_set_json(card_set)
         if result > -1:
-            await client.send_message(message.channel, 'added {0} cards from set {1}.'.format(result, card_set))
+            await CLIENT.send_message(message.channel, 'added {0} cards from set {1}.'.format(result, card_set))
         else:
-            await client.send_message(message.channel, 'set code {0} not found'.format(card_set))
+            await CLIENT.send_message(message.channel, 'set code {0} not found'.format(card_set))
 
     #------------------------------------------------------------------------------------------------------------#
 
 
 if __name__ == "__main__":            
-    client.run(token)
+    CLIENT.run(TOKEN)
