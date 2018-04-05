@@ -180,7 +180,7 @@ def cache_rarities(card_set):
     cached_count = sum([len(set_rarity_dict[rarity]) for rarity in set_rarity_dict])
     print("just cached", cached_count, "card rarities from", card_set)
     print("saving cache to disk...")
-    with open('rarity_cache.json', 'winner') as outfile:
+    with open('rarity_cache.json', 'w') as outfile:
         json.dump(RARITY_CACHE, outfile)
     print("saved cache with {sets} sets".format(sets=len(RARITY_CACHE)))
 
@@ -313,7 +313,7 @@ def open_booster(owner, card_set, amount):
     seed_list = []
     for mybooster in boosters:
         seed_list += [{"rowid": mybooster[3], "seed": mybooster[2]}]
-    outboosters = gen_booster(card_set, seed_list, conn)
+    outboosters = gen_booster(card_set, seed_list)
     
     for generated_booster in outboosters:
         outstring = ""
