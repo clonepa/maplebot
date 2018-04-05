@@ -301,11 +301,14 @@ def adjustbux(who, how_much):
 
 def open_booster(owner, card_set, amount):
     opened_boosters = []
-    openbooster_benchmark_time = time.time()
     conn = sqlite3.connect('maple.db')
     cursor = conn.cursor()
-    cursor.execute("SELECT *, rowid FROM booster_inventory WHERE owner_id=:name AND card_set LIKE :set LIMIT :amount",
-             {"name": owner, "set": card_set, "amount": amount})
+    if amount == "all":
+        cursor.execute("SELECT *, rowid FROM booster_inventory WHERE owner_id=:name AND card_set LIKE :set",
+                 {"name": owner, "set": card_set})
+    else:
+        cursor.execute("SELECT *, rowid FROM booster_inventory WHERE owner_id=:name AND card_set LIKE :set LIMIT :amount",
+                 {"name": owner, "set": card_set, "amount": amount})
     boosters = cursor.fetchall()
     if boosters == None:
         return opened_boosters
@@ -335,7 +338,6 @@ def open_booster(owner, card_set, amount):
         opened_boosters.append(outstring)
     conn.commit()
     conn.close()
-    print("open_booster time:",time.time() - openbooster_benchmark_time,"for",amount,"packs")
     return opened_boosters
 
 def load_set_json(card_set):
@@ -729,6 +731,8 @@ async def on_message(message):
         args = message.content.split(maxsplit=2)[1:]
         if len(args) < 2:
             amount = 1
+        elif args[1] == "all":
+            amount = "all"
         elif args[1].isdigit():
             amount = int(args[1])
         else:
