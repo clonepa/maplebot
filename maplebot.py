@@ -13,15 +13,17 @@ import requests
 import discord
 
 import deckhash
-import mapletoken
+import mapleconfig
 
 
 CLIENT = discord.Client()
-TOKEN = mapletoken.get_token()
-MTGOX_CHANNEL_ID = mapletoken.get_mainchannel_id()
+TOKEN = mapleconfig.get_token()
+MTGOX_CHANNEL_ID = mapleconfig.get_mainchannel_id()
+DEBUG_WHITELIST = mapleconfig.get_debug_whitelist()
+
 IN_TRANSACTION = []
 
-BOOSTER_OVERRIDE = {"LEA": 6999.97, "LEB": 2999.95, "2ED": 1499.90, "3ED": 139.95, "ARN": 3500.00}
+BOOSTER_OVERRIDE = {"LEA": 6999.97, "ARN": 3500.00, "LEB": 2999.95, "2ED": 1499.90, "3ED": 139.95, "4ED": 24.95, "5ED": 11.99}
 
 print('Loading rarity cache...')
 try:
@@ -811,7 +813,10 @@ async def on_message(message):
     ##############################################################################################################
         
     #------------------------------------------------------------------------------------------------------------#
-        
+    
+    if user not in DEBUG_WHITELIST:
+        return
+
     elif message.content.startswith('!query'):
         query = message.content[len(message.content.split()[0]):]
         conn = sqlite3.connect('maple.db')
