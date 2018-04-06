@@ -228,15 +228,19 @@ def gen_booster(card_set, seeds):
 
             generated_booster = []
             for rarity_card in mybooster:
-                if rarity_card in rarity_dict["rarities"]:
-                    card_pool = RARITY_CACHE[card_set][rarity_card]
-                elif rarity_card == "power nine":
-                    card_pool = RARITY_CACHE[card_set]["special"]
-                elif rarity_card in rarity_dict["other_shit"]:
-                    card_pool = RARITY_CACHE[card_set]["common"]
-                else:
-                    ## this flattens the rarity dict so we get all the cards
-                    card_pool = sorted({x for v in RARITY_CACHE[card_set].values() for x in v})
+                try:
+                    if rarity_card in rarity_dict["rarities"]:
+                        card_pool = RARITY_CACHE[card_set][rarity_card]
+                    elif rarity_card == "power nine":
+                        card_pool = RARITY_CACHE[card_set]["special"]
+                    elif rarity_card in rarity_dict["other_shit"]:
+                        card_pool = RARITY_CACHE[card_set]["common"]
+                    else:
+                        # this flattens the rarity dict so we get all the cards
+                        card_pool = sorted({x for v in RARITY_CACHE[card_set].values() for x in v})
+                except KeyError:
+                    print('WARNING no cards of rarity {0} in set {1}'.format(rarity_card, card_set))
+                    card_pool = []
                 if card_pool:
                     chosen_card_id = random.choice(card_pool)
                     cursor.execute("""SELECT multiverse_id, card_name, rarity FROM cards
