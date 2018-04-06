@@ -105,6 +105,7 @@ def get_booster_price(card_set):
         return float(div_match.group(1))
     return 3.25
 
+
 def verify_nick(nick):
     '''returns True if nick doesn't exist in db, False if it does'''
     conn = sqlite3.connect('maple.db')
@@ -227,15 +228,19 @@ def gen_booster(card_set, seeds):
 
             generated_booster = []
             for rarity_card in mybooster:
-                if rarity_card in rarity_dict["rarities"]:
-                    card_pool = RARITY_CACHE[card_set][rarity_card]
-                elif rarity_card == "power nine":
-                    card_pool = RARITY_CACHE[card_set]["special"]
-                elif rarity_card in rarity_dict["other_shit"]:
-                    card_pool = RARITY_CACHE[card_set]["common"]
-                else:
-                    ## this flattens the rarity dict so we get all the cards
-                    card_pool = sorted({x for v in RARITY_CACHE[card_set].values() for x in v})
+                try:
+                    if rarity_card in rarity_dict["rarities"]:
+                        card_pool = RARITY_CACHE[card_set][rarity_card]
+                    elif rarity_card == "power nine":
+                        card_pool = RARITY_CACHE[card_set]["special"]
+                    elif rarity_card in rarity_dict["other_shit"]:
+                        card_pool = RARITY_CACHE[card_set]["common"]
+                    else:
+                        # this flattens the rarity dict so we get all the cards
+                        card_pool = sorted({x for v in RARITY_CACHE[card_set].values() for x in v})
+                except KeyError:
+                    print('WARNING no cards of rarity {0} in set {1}'.format(rarity_card, card_set))
+                    card_pool = []
                 if card_pool:
                     chosen_card_id = random.choice(card_pool)
                     cursor.execute("""SELECT multiverse_id, card_name, rarity FROM cards
@@ -968,34 +973,37 @@ async def cmd_loadsetjson(user, message):
         await CLIENT.send_message(message.channel, 'added {0} cards from set {1}.'.format(result, card_set))
     else:
         await CLIENT.send_message(message.channel, 'set code {0} not found'.format(card_set))
-        
-async def cmd_mapletest(user, message):
-    await CLIENT.send_message(message.channel, 'i\'m {0} and my guts are made of python 3.6, brah :surfer:'.format(CLIENT.user.name))
-    
-COMMANDS = {"!register": cmd_register,
-            "!givecard": cmd_givecard,
-            "!exportcollection": cmd_exportcollection,
-            "!checkdeck": cmd_checkdeck,
-            "!packprice": cmd_packprice,
-            "!checkbux": cmd_checkbux,
-            "!givebux": cmd_givebux,
-            "!openbooster": cmd_openbooster,
-            "!maplecard": cmd_maplecard,
-            "!buybooster": cmd_buybooster,
-            "!recordmatch": cmd_recordmatch,
-            "!hash": cmd_hash,
-            "!changenick": cmd_changenick,
-            "!userinfo": cmd_userinfo,
-            "!mapletest": cmd_mapletest}
 
-DEBUG_COMMANDS = {"!query": cmd_query,
-                  "!gutdump": cmd_gutdump,
-                  "!setupdb": cmd_setupdb,
-                  "!populatesetinfo": cmd_populatesetinfo,
-                  "!populatecardinfo": cmd_populatecardinfo,
-                  "!givebooster": cmd_givebooster,
-                  "!adjustbux": cmd_adjustbux,
-                  "!loadsetjson": cmd_loadsetjson}
+
+async def cmd_mapletest(user, message):
+    await CLIENT.send_message(message.channel, "i'm {0} and my guts are made of python 3.6, brah :surfer:".format(CLIENT.user.name))
+
+
+COMMANDS = {"register": cmd_register,
+            "givecard": cmd_givecard,
+            "exportcollection": cmd_exportcollection,
+            "checkdeck": cmd_checkdeck,
+            "packprice": cmd_packprice,
+            "checkbux": cmd_checkbux,
+            "givebux": cmd_givebux,
+            "openbooster": cmd_openbooster,
+            "maplecard": cmd_maplecard,
+            "buybooster": cmd_buybooster,
+            "recordmatch": cmd_recordmatch,
+            "hash": cmd_hash,
+            "changenick": cmd_changenick,
+            "userinfo": cmd_userinfo,
+            "mapletest": cmd_mapletest}
+
+DEBUG_COMMANDS = {"query": cmd_query,
+                  "gutdump": cmd_gutdump,
+                  "setupdb": cmd_setupdb,
+                  "populatesetinfo": cmd_populatesetinfo,
+                  "populatecardinfo": cmd_populatecardinfo,
+                  "givebooster": cmd_givebooster,
+                  "adjustbux": cmd_adjustbux,
+                  "loadsetjson": cmd_loadsetjson}
+
 
 @CLIENT.event
 async def on_ready():
@@ -1004,16 +1012,23 @@ async def on_ready():
     print(CLIENT.user.id)
     print('------')
 
+
 @CLIENT.event
 async def on_message(message):
-    user = str(message.author.id)
-    command = message.content.split()[0]
+    if message.content.startswith('!'):
+        user = str(message.author.id)
+        command = message.content.split()[0][1:]
 
-    if (command in COMMANDS) and (command == "!register" or is_registered(user)):
-        await COMMANDS[command](user, message)
-    elif (command in DEBUG_COMMANDS) and (user in DEBUG_WHITELIST):
-        await DEBUG_COMMANDS[command](user, message)
-
+        if command in COMMANDS:
+            if command == "register" or is_registered(user):
+                await COMMANDS[command](user, message)
+            else:
+                await CLIENT.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
+        elif command in DEBUG_COMMANDS:
+            if (user in DEBUG_WHITELIST):
+                await DEBUG_COMMANDS[command](user, message)
+            else:
+                await CLIENT.send_message(message.channel, "<@{0}> that's a debug command, you rascal!".format(user))
 
 if __name__ == "__main__":
     CLIENT.run(TOKEN)
