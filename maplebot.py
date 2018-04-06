@@ -538,6 +538,464 @@ def make_ptpb(text):
     response = requests.post('https://ptpb.pw/', data={"content": text})
     return next(i.split()[1] for i in response.text.split('\n') if i.startswith('url:'))
 
+async def cmd_register(user, message):
+    nickname = message.content.split()[1]
+    conn = sqlite3.connect('maple.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM users WHERE discord_id=' + user)
+    if cursor.fetchall():
+        await CLIENT.send_message(message.channel, 'user with discord ID ' + user +
+                                  ' already exists. don\'t try to pull a fast one on old maple!!')
+    elif not verify_nick(nickname):
+        await CLIENT.send_message(message.channel, 'user with nickname ' + nickname +
+                                  ' already exists. don\'t try to confuse old maple you hear!!')
+    else:
+        cursor.execute("INSERT INTO users VALUES ('" + user + "','" + nickname + "',1500,50.00)")
+        conn.commit()
+        conn.close()
+        give_homie_some_lands(user)
+        give_booster(user, "M13", 15)
+        await CLIENT.send_message(message.channel, 'created user in database with ID ' + user +
+                                  ' and nickname ' + nickname +
+                                  '!\nI gave homie 60 of each Basic Land and 15 Magic 2013 Booster Packs!!')
+    conn.close()
+    return 
+
+async def cmd_givecard(user, message):
+    #format: !givecard clonepa Swamp 2
+    target, card = message.content.split(maxsplit=2)[1:] # = target = 'clonepa', card= 'Swamp 2'
+    amount_re = re.search(r'\seed+(\d+)$', card)
+    if amount_re:
+        amount = int(amount_re[1])
+        card = card[:-len(amount_re[0])]
+    else:
+        amount = 1
+
+    result_dict = give_card(user, target, card, amount)
+
+    reply_dict = {
+        0: "gave {0} {1} to <@{2}>!".format(amount,
+                                            result_dict['card_name'],
+                                            result_dict['target_id']),
+        1: "that's not a valid recipient!!",
+        2: "hey, you don't have that card at all!",
+        3: "hold up, you only have {0} of {1}!!".format(result_dict['amount_owned'],
+                                                        result_dict['card_name']),
+        4: "now that's just silly",
+        5: "you only have {0} of that printing of {1}!".format(result_dict['amount_owned'],
+                                                               result_dict['card_name'])
+    }
+
+    await CLIENT.send_message(message.channel,
+                              "<@{0}> {1}".format(user, reply_dict[result_dict['code']]))
+
+async def cmd_exportcollection(user, message):
+    await CLIENT.send_typing(message.channel)
+    exported_collection = export_collection_to_sideboard(user)
+
+    pb_url = make_ptpb(exported_collection)
+
+    await CLIENT.send_message(
+        message.channel,
+        "<@{0}>, here's your exported collection: {1}\ncopy it into cockatrice to build a deck!!"
+        .format(user, pb_url)
+    )
+
+async def cmd_checkdeck(user, message):
+    deck = message.content[len(message.content.split()[0]):].strip()
+    missing_cards = validate_deck(deck, user)
+
+    if missing_cards:
+        needed_cards_str = '\n'.join(["{0} {1}".format(missing_cards[card], card)
+                                      for card in missing_cards])
+        await CLIENT.send_message(message.channel,
+                                  ("<@{0}>, you don't have the cards for that deck!! " +
+                                   "You need:\n```{1}```").format(user, needed_cards_str))
+    else:
+        hashed_deck = deckhash.make_deck_hash(*deckhash.convert_deck_to_boards(deck))
+        await CLIENT.send_message(CLIENT.get_channel(MTGOX_CHANNEL_ID),
+                                  "<@{0}> has submitted a collection-valid deck! hash: `{1}`"
+                                  .format(user, hashed_deck))
+        
+async def cmd_packprice(user, message):
+    '''!packprice [setcode]
+    returns mtgo booster pack price for the set via mtggoldfish'''
+    card_set = message.content.split()[1].upper()
+    setname = get_set_info(card_set)['name']
+
+    await CLIENT.send_typing(message.channel)
+    price = get_booster_price(card_set)
+    if price:
+        out = "{0} booster pack price: ${1}".format(setname, price)
+    else:
+        out = "no prices found for that set brah"
+
+    await CLIENT.send_message(message.channel, out)
+
+async def cmd_checkbux(user, message):
+    await CLIENT.send_message(message.channel,
+                              "<@{0}> your maplebux balance is: ${1}"
+                              .format(user, '%.2f'%check_bux(user)))
+
+async def cmd_givebux(user, message):
+    player_1 = message.content.split()[1]
+    player_2 = float('%.2f'%float(message.content.split()[2]))
+    myself = user
+    mycash = check_bux(myself)
+    otherperson = ""
+    conn = sqlite3.connect('maple.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT name FROM users WHERE discord_id=:who OR name=:who",
+                   {"who":player_1})
+    result = cursor.fetchone()
+    if result:
+        otherperson = result[0]
+    else:
+        await CLIENT.send_message(message.channel,
+                                  "I'm not sure who you're trying to give money to...")
+        return
+
+    cursor.execute("SELECT name FROM users WHERE discord_id=:who OR name=:who", {"who":myself})
+    result = cursor.fetchone()
+    if result:
+        if result[0] == otherperson:
+            await CLIENT.send_message(message.channel,
+                                      "sending money to yourself... that's shady...")
+            return
+
+    if player_2 < 0:
+        await CLIENT.send_message(message.channel, "wait a minute that's a robbery!")
+        return
+    if mycash == 0 or mycash - player_2 < 0:
+        await CLIENT.send_message(message.channel, "not enough bux to ride this trux :surfer:")
+        return
+    adjustbux(myself, player_2 * -1)
+    adjustbux(otherperson, player_2)
+    await CLIENT.send_message(message.channel, "sent ${0} to {1}".format(player_2, player_1))
+    conn.close()
+
+async def cmd_openbooster(user, message):
+    args = message.content.split(maxsplit=2)[1:]
+    if len(args) < 2:
+        amount = 1
+    elif args[1] == "all":
+        amount = "all"
+    elif args[1].isdigit():
+        amount = int(args[1])
+    else:
+        await CLIENT.send_message(message.channel, "<@{0}> that's nonsense bro!!".format(user))
+        return
+    card_set = args[0].upper()
+
+    await CLIENT.send_typing(message.channel)
+    boosters_list = open_booster(user, card_set, amount)
+    boosters_opened = len(boosters_list)
+    if boosters_opened == 1:
+        await CLIENT.send_message(message.channel,
+                                  "<@{0}>\n```{1}```".format(user, boosters_list[0]))
+    elif boosters_opened > 1:
+        outstring = "{0} opened {1} boosters by {2}:\n\n".format(boosters_opened,
+                                                                 card_set,
+                                                                 message.author.display_name)
+        for i, booster in enumerate(boosters_list):
+            outstring += "------- Booster #{0} -------\n".format(i + 1)
+            outstring += booster + '\n'
+        pb_url = make_ptpb(outstring)
+        await CLIENT.send_message(message.channel,
+                                  "<@{0}>, your {1} opened {2} boosters: {3}"
+                                  .format(user, boosters_opened, card_set, pb_url))
+    else:
+        await CLIENT.send_message(message.channel, "<@{0}> don't have any of those homie!!"
+                                  .format(user))
+    
+async def cmd_maplecard(user, message):
+    cname = message.content[len(message.content.split()[0]):]
+    cname = cname.replace(" ", "%20")
+    await CLIENT.send_message(message.channel,
+                              "https://api.scryfall.com/cards/named?fuzzy=!{0}!&format=image"
+                              .format(cname))
+    
+async def cmd_buybooster(user, message):
+    if user in IN_TRANSACTION:
+        await CLIENT.send_message(message.channel, "<@{0}> you're currently in a transaction! ...guess I'll cancel it for you".format(user))
+        IN_TRANSACTION.remove(user)
+    args = message.content.split(maxsplit=2)[1:] # !buybooster set amount
+    card_set = args[0].upper()
+    amount = int(args[1]) if len(args) == 2 else 1
+
+    cardobj = load_mtgjson()
+    if card_set not in cardobj:
+        await CLIENT.send_message(message.channel,
+                                  "<@{0}> I don't know what set that is...".format(user))
+        return
+
+    setname = get_set_info(card_set)['name']
+    pack_price = get_booster_price(card_set)
+    price = pack_price * amount
+
+    if check_bux(user) < price:
+        await CLIENT.send_message(message.channel, "<@{0}> hey idiot why don't you come back with more money".format(user))
+        return
+
+    IN_TRANSACTION.append(user)
+    await CLIENT.send_message(message.channel, "<@{0}> Buy {1} {2} booster{plural} for ${3}?"
+                              .format(user,
+                                      amount,
+                                      setname,
+                                      '%.2f' % float(price),
+                                      plural=("s" if amount > 1 else "")))
+
+    msg = await CLIENT.wait_for_message(timeout=15.0, author=message.author)
+    if not msg:
+        return
+    if (msg.content.startswith('y') or msg.content.startswith('Y')):
+        adjustbux(user, float(price) * -1)
+        result = give_booster(user, card_set, amount)
+    elif (msg.content.startswith('n') or msg.content.startswith('N')):
+        result = "well ok"
+    else:
+        result = None
+
+    if result:
+        await CLIENT.send_message(message.channel, "<@{0}> {1}".format(user, result))
+    IN_TRANSACTION.remove(user)
+
+async def cmd_recordmatch(user, message):
+    player_1, player_2 = message.content.split()[1:]
+    player_1_elo = get_user_record(player_1, "elo_rating")[0]
+    player_2_elo = get_user_record(player_2, "elo_rating")[0]
+
+    newelo = calc_elo_change(player_1_elo, player_2_elo)
+    bux_adjustment = 3.00 * (newelo[0] - player_1_elo)/32
+    bux_adjustment = float('%.2f'%bux_adjustment)
+
+    update_elo(player_1, newelo[0])
+    update_elo(player_2, newelo[1])
+
+    adjustbux(player_1, bux_adjustment)
+    adjustbux(player_2, bux_adjustment/3)
+    await CLIENT.send_message(message.channel, player_1 + " new elo: " + str(newelo[0])
+                              + "\n" +
+                              player_2 + " new elo: " + str(newelo[1]) +
+                              "\npayout: $" + str(bux_adjustment))
+    
+async def cmd_hash(user, message):
+    thing_to_hash = message.content[len(message.content.split()[0]):]
+    hashed_thing = deckhash.make_deck_hash(*deckhash.convert_deck_to_boards(thing_to_hash))
+    await CLIENT.send_message(message.channel, 'hashed deck: ' + hashed_thing)
+
+async def cmd_changenick(user, message):
+    nick = message.content.split()[1]
+    if not verify_nick(nick):
+        await CLIENT.send_message(message.channel,
+                                  ("user with nickname {0} already exists. " +
+                                   "don't try to confuse old maple you hear!!").format(nick))
+    else:
+        conn = sqlite3.connect('maple.db')
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET name='" + nick + "' WHERE discord_id='" + user + "'")
+        conn.commit()
+        await CLIENT.send_message(message.channel, message.author.mention + " updated nickname")
+        conn.close()
+
+async def cmd_userinfo(user, message):
+    conn = sqlite3.connect('maple.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE discord_id='" + user + "'")
+    result = cursor.fetchone()
+    outstring = '''*nickname*: {nick}
+                *discord id*: {discord_id}
+                *elo rating*: {elo}
+                *maplebux*: {maplebux}'''.format(nick=result[1],
+                                                 discord_id=result[0],
+                                                 elo=result[2],
+                                                 maplebux=result[3])
+    outstring = re.sub(r'\n\s+', '\n', outstring)
+
+    await CLIENT.send_message(message.channel, outstring)
+    conn.close()
+
+async def cmd_query(user, message):
+    query = message.content[len(message.content.split()[0]):]
+    conn = sqlite3.connect('maple.db')
+    cursor = conn.cursor()
+    if ('DROP' in query.upper() and user != '234042140248899587'):
+        await CLIENT.send_message(message.channel, "pwease no droppy u_u")
+        return
+    outstring = ""
+    try:
+        cursor.execute(query)
+        for i in cursor.fetchall():
+            if len(outstring) > 1500:
+                await CLIENT.send_message(message.channel, "```" + outstring + "\n```")
+                outstring = ""
+            outstring += str(i) + "\n"
+    except sqlite3.OperationalError:
+        outstring = "sqlite operational error homie...\n" + str(sys.exc_info()[1])
+
+    if outstring == "":
+        outstring = "No output so it probably worked"
+    await CLIENT.send_message(message.channel, "```" + outstring + "```")
+    conn.commit()
+    conn.close()
+    
+async def cmd_gutdump(user, message):
+    table = ""
+    if len(message.content.split()) < 2:
+        table = "users"
+    else:
+        table = message.content.split()[1]
+
+    if table == "maple":
+        with open(__file__) as file:
+            out = file.read(1024)
+            while out:
+                await CLIENT.send_message(message.channel,
+                                          "```"  + out.replace("```", "[codeblock]") + "```")
+                out = file.read(1024)
+                await asyncio.sleep(0.25)
+        return
+    conn = sqlite3.connect('maple.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM " + table)
+    outstring = ""
+    names = [description[0] for description in cursor.description]
+    for i in cursor.fetchall():
+        if len(outstring) > 1500:
+            await CLIENT.send_message(message.channel,
+                                      "```" + str(names) + "\n\n" + outstring + "\n```")
+            outstring = ""
+        outstring += str(i) + "\n"
+    if outstring:
+        await CLIENT.send_message(message.channel,
+                                  "```" + str(names) + "\n\n" + outstring + "\n```")
+    conn.close()
+
+async def cmd_setupdb(user, message):
+    conn = sqlite3.connect('maple.db')
+    cursor = conn.cursor()
+    cursor.execute('''CREATE TABLE IF NOT EXISTS users
+                 (discord_id TEXT, name TEXT, elo_rating INTEGER, cash REAL)''')
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS match_history
+                 (winner TEXT, loser TEXT, winner_deckhash TEXT, loser_deckhash TEXT, FOREIGN KEY(winner) REFERENCES users(discord_id), FOREIGN KEY(loser) REFERENCES users(discord_id))''')
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS cards
+                 (multiverse_id INTEGER PRIMARY KEY, card_name TEXT, card_set TEXT, card_type TEXT, rarity TEXT, colors TEXT, cmc TEXT)''')
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS collection
+                 (owner_id TEXT, multiverse_id INTEGER, amount_owned INTEGER,
+                 FOREIGN KEY(owner_id) REFERENCES users(discord_id), FOREIGN KEY(multiverse_id) REFERENCES cards(multiverse_id),
+                 PRIMARY KEY (owner_id, multiverse_id))''')
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS booster_inventory
+                 (owner_id TEXT, card_set TEXT, seed REAL, FOREIGN KEY(owner_id) REFERENCES users(discord_id), FOREIGN KEY(card_set) REFERENCES set_map(code))''')
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS set_map
+                 (name TEXT, code TEXT, alt_code TEXT, PRIMARY KEY (code, alt_code))''')
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS timestamped_base64_strings
+                 (name TEXT PRIMARY KEY, b64str TEXT, timestamp REAL)''')
+
+    cursor.execute('''CREATE TRIGGER IF NOT EXISTS delete_from_collection_on_zero
+                AFTER UPDATE OF amount_owned ON collection BEGIN 
+                DELETE FROM collection WHERE amount_owned < 1; 
+                END''')
+    conn.commit()
+    conn.close()
+
+async def cmd_populatesetinfo(user, message):
+    #do not use load_mtgjson() here
+    with open ('AllSets.json', encoding="utf8") as f:
+        cardobj = json.load(f)
+    conn = sqlite3.connect('maple.db')
+    cursor = conn.cursor()
+    for card_set in cardobj:
+        print(cardobj[card_set]["name"])
+        name = ""
+        code = ""
+        alt_code = ""
+        if "name" in cardobj[card_set]:
+            name = cardobj[card_set]["name"]
+        if "code" in cardobj[card_set]:
+            code = cardobj[card_set]["code"]
+        if "magicCardsInfoCode" in cardobj[card_set]:
+            alt_code = cardobj[card_set]["magicCardsInfoCode"]
+        if code != "" and name != "":
+            cursor.execute("INSERT OR IGNORE INTO set_map VALUES (?, ?, ?)", (name, code, alt_code))
+    conn.commit()
+    conn.close()
+    
+async def cmd_populatecardinfo(user, message):
+    #bot will time out while waiting for this to finish, so you know be careful out there
+    outstring = ""
+    cardobj = load_mtgjson()
+    setcount = 0
+    count = 0
+    for card_set in cardobj:
+        if "code" not in cardobj[card_set]:
+            continue
+        count += load_set_json(cardobj[card_set]['code'].upper())
+        setcount += 1
+        print(count, setcount)
+    print('added {0} cards from {1} sets'.format(count, setcount))
+    
+async def cmd_givebooster(user, message):
+    card_set = message.content.split()[1].upper()
+    if len(message.content.split()) > 2:
+        person_getting_booster = message.content.split()[2]
+    if len(message.content.split()) > 3:
+        amount = int(message.content.split()[3])
+    else:
+        amount = 1
+        person_getting_booster = user
+
+
+    result = give_booster(person_getting_booster, card_set, amount)
+    await CLIENT.send_message(message.channel, result)
+        
+async def cmd_adjustbux(user, message):
+    p1 = message.content.split()[1]
+    p2 = float(message.content.split()[2])
+    adjustbux(p1, p2)
+    await CLIENT.send_message(message.channel, "updated bux")
+        
+async def cmd_loadsetjson(user, message):
+    card_set = message.content.split()[1].upper()
+
+    result = load_set_json(card_set)
+    if result > -1:
+        await CLIENT.send_message(message.channel, 'added {0} cards from set {1}.'.format(result, card_set))
+    else:
+        await CLIENT.send_message(message.channel, 'set code {0} not found'.format(card_set))
+        
+async def cmd_mapletest(user, message):
+    await CLIENT.send_message(message.channel, 'i\'m {0} and my guts are made of python 3.6, brah :surfer:'.format(CLIENT.user.name))
+    
+COMMANDS = {"!register": cmd_register,
+            "!givecard": cmd_givecard,
+            "!exportcollection": cmd_exportcollection,
+            "!checkdeck": cmd_checkdeck,
+            "!packprice": cmd_packprice,
+            "!checkbux": cmd_checkbux,
+            "!givebux": cmd_givebux,
+            "!openbooster": cmd_openbooster,
+            "!maplecard": cmd_maplecard,
+            "!buybooster": cmd_buybooster,
+            "!recordmatch": cmd_recordmatch,
+            "!hash": cmd_hash,
+            "!changenick": cmd_changenick,
+            "!userinfo": cmd_userinfo,
+            "!mapletest": cmd_mapletest}
+
+DEBUG_COMMANDS = {"!query": cmd_query,
+                  "!gutdump": cmd_gutdump,
+                  "!setupdb": cmd_setupdb,
+                  "!populatesetinfo": cmd_populatesetinfo,
+                  "!populatecardinfo": cmd_populatecardinfo,
+                  "!givebooster": cmd_givebooster,
+                  "!adjustbux": cmd_adjustbux,
+                  "!loadsetjson": cmd_loadsetjson}
 
 @CLIENT.event
 async def on_ready():
@@ -549,556 +1007,12 @@ async def on_ready():
 @CLIENT.event
 async def on_message(message):
     user = str(message.author.id)
-
-    #----------------------------------------------------------------------------------------------#
-    # !register before anything else
-
-    if message.content.startswith('!register'):
-        nickname = message.content.split()[1]
-        conn = sqlite3.connect('maple.db')
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM users WHERE discord_id=' + user)
-        if cursor.fetchall():
-            await CLIENT.send_message(message.channel, 'user with discord ID ' + user +
-                                      ' already exists. don\'t try to pull a fast one on old maple!!')
-        elif not verify_nick(nickname):
-            await CLIENT.send_message(message.channel, 'user with nickname ' + nickname +
-                                      ' already exists. don\'t try to confuse old maple you hear!!')
-        else:
-            cursor.execute("INSERT INTO users VALUES ('" + user + "','" + nickname + "',1500,50.00)")
-            conn.commit()
-            conn.close()
-
-            give_homie_some_lands(user)
-            give_booster(user, "M13", 15)
-            await CLIENT.send_message(message.channel, 'created user in database with ID ' + user +
-                                      ' and nickname ' + nickname +
-                                      '!\nI gave homie 60 of each Basic Land and 15 Magic 2013 Booster Packs!!')
-        conn.close()
-        return
-
-    #----------------------------------------------------------------------------------------------#
-
-    #----------------------------------------------------------------------------------------------#
-
-    if message.content.startswith('!givecard'):
-        if not is_registered(user):
-            await CLIENT.send_message(message.channel,
-                                      "<@{0}>, you ain't registered!!".format(user))
-            return
-
-        #format: !givecard clonepa Swamp 2
-        target, card = message.content.split(maxsplit=2)[1:] # = target = 'clonepa', card= 'Swamp 2'
-        amount_re = re.search(r'\s+(\d+)$', card)
-        if amount_re:
-            amount = int(amount_re[1])
-            card = card[:-len(amount_re[0])]
-        else:
-            amount = 1
-
-        result_dict = give_card(user, target, card, amount)
-
-        reply_dict = {
-            0: "gave {0} {1} to <@{2}>!".format(amount,
-                                                result_dict['card_name'],
-                                                result_dict['target_id']),
-            1: "that's not a valid recipient!!",
-            2: "hey, you don't have that card at all!",
-            3: "hold up, you only have {0} of {1}!!".format(result_dict['amount_owned'],
-                                                            result_dict['card_name']),
-            4: "now that's just silly",
-            5: "you only have {0} of that printing of {1}!".format(result_dict['amount_owned'],
-                                                                   result_dict['card_name'])
-        }
-
-        await CLIENT.send_message(message.channel,
-                                  "<@{0}> {1}".format(user, reply_dict[result_dict['code']]))
-
-    #----------------------------------------------------------------------------------------------#
-
-    if message.content.startswith('!exportcollection') or message.content.startswith('!exportcollectiom'):
-        if not is_registered(user):
-            await CLIENT.send_message(message.channel,
-                                      "<@{0}>, you ain't registered!!".format(user))
-            return
-
-
-        await CLIENT.send_typing(message.channel)
-        exported_collection = export_collection_to_sideboard(user)
-
-        pb_url = make_ptpb(exported_collection)
-
-        await CLIENT.send_message(
-            message.channel,
-            "<@{0}>, here's your exported collection: {1}\ncopy it into cockatrice to build a deck!!"
-            .format(user, pb_url)
-        )
-
-    #----------------------------------------------------------------------------------------------#
-
-    elif message.content.startswith('!checkdeck'):
-        if not is_registered(user):
-            await CLIENT.send_message(message.channel,
-                                      "<@{0}>, you ain't registered!!".format(user))
-            return
-
-        deck = message.content[len(message.content.split()[0]):].strip()
-        missing_cards = validate_deck(deck, user)
-
-        if missing_cards:
-            needed_cards_str = '\n'.join(["{0} {1}".format(missing_cards[card], card)
-                                          for card in missing_cards])
-            await CLIENT.send_message(message.channel,
-                                      ("<@{0}>, you don't have the cards for that deck!! " +
-                                       "You need:\n```{1}```").format(user, needed_cards_str))
-        else:
-            hashed_deck = deckhash.make_deck_hash(*deckhash.convert_deck_to_boards(deck))
-            await CLIENT.send_message(CLIENT.get_channel(MTGOX_CHANNEL_ID),
-                                      "<@{0}> has submitted a collection-valid deck! hash: `{1}`"
-                                      .format(user, hashed_deck))
-
-    #----------------------------------------------------------------------------------------------#
-
-    elif message.content.startswith('!packprice'):
-        '''!packprice [setcode]
-        returns mtgo booster pack price for the set via mtggoldfish'''
-        card_set = message.content.split()[1].upper()
-        setname = get_set_info(card_set)['name']
-
-        await CLIENT.send_typing(message.channel)
-        price = get_booster_price(card_set)
-        if price:
-            out = "{0} booster pack price: ${1}".format(setname, price)
-        else:
-            out = "no prices found for that set brah"
-
-        await CLIENT.send_message(message.channel, out)
-
-    #----------------------------------------------------------------------------------------------#
-
-    elif message.content.startswith('!checkbux') or message.content.startswith('!checkvux'):
-        await CLIENT.send_message(message.channel,
-                                  "<@{0}> your maplebux balance is: ${1}"
-                                  .format(user, '%.2f'%check_bux(user)))
-
-    #----------------------------------------------------------------------------------------------#
-
-    elif message.content.startswith('!givebux') or message.content.startswith('!givevux'):
-        player_1 = message.content.split()[1]
-        player_2 = float('%.2f'%float(message.content.split()[2]))
-        myself = user
-        mycash = check_bux(myself)
-        otherperson = ""
-        conn = sqlite3.connect('maple.db')
-        cursor = conn.cursor()
-        cursor.execute("SELECT name FROM users WHERE discord_id=:who OR name=:who",
-                       {"who":player_1})
-        result = cursor.fetchone()
-        if result:
-            otherperson = result[0]
-        else:
-            await CLIENT.send_message(message.channel,
-                                      "I'm not sure who you're trying to give money to...")
-            return
-
-        cursor.execute("SELECT name FROM users WHERE discord_id=:who OR name=:who", {"who":myself})
-        result = cursor.fetchone()
-        if result:
-            if result[0] == otherperson:
-                await CLIENT.send_message(message.channel,
-                                          "sending money to yourself... that's shady...")
-                return
-
-        if player_2 < 0:
-            await CLIENT.send_message(message.channel, "wait a minute that's a robbery!")
-            return
-        if mycash == 0 or mycash - player_2 < 0:
-            await CLIENT.send_message(message.channel, "not enough bux to ride this trux :surfer:")
-            return
-        adjustbux(myself, player_2 * -1)
-        adjustbux(otherperson, player_2)
-        await CLIENT.send_message(message.channel, "sent ${0} to {1}".format(player_2, player_1))
-        conn.close()
-
-    #----------------------------------------------------------------------------------------------#
-
-    elif message.content.startswith('!openbooster') or message.content.startswith('!opemvooster'):
-        if not is_registered(user):
-            await CLIENT.send_message(message.channel,
-                                      "<@{0}>, you ain't registered!!".format(user))
-            return
-
-        args = message.content.split(maxsplit=2)[1:]
-        if len(args) < 2:
-            amount = 1
-        elif args[1] == "all":
-            amount = "all"
-        elif args[1].isdigit():
-            amount = int(args[1])
-        else:
-            await CLIENT.send_message(message.channel, "<@{0}> that's nonsense bro!!".format(user))
-            return
-        card_set = args[0].upper()
-
-        await CLIENT.send_typing(message.channel)
-        boosters_list = open_booster(user, card_set, amount)
-        boosters_opened = len(boosters_list)
-        if boosters_opened == 1:
-            await CLIENT.send_message(message.channel,
-                                      "<@{0}>\n```{1}```".format(user, boosters_list[0]))
-        elif boosters_opened > 1:
-            outstring = "{0} opened {1} boosters by {2}:\n\n".format(boosters_opened,
-                                                                     card_set,
-                                                                     message.author.display_name)
-            for i, booster in enumerate(boosters_list):
-                outstring += "------- Booster #{0} -------\n".format(i + 1)
-                outstring += booster + '\n'
-            pb_url = make_ptpb(outstring)
-            await CLIENT.send_message(message.channel,
-                                      "<@{0}>, your {1} opened {2} boosters: {3}"
-                                      .format(user, boosters_opened, card_set, pb_url))
-        else:
-            await CLIENT.send_message(message.channel, "<@{0}> don't have any of those homie!!"
-                                      .format(user))
-
-    #----------------------------------------------------------------------------------------------#
-
-    elif message.content.startswith("!maplecard"):
-        cname = message.content[len(message.content.split()[0]):]
-        cname = cname.replace(" ", "%20")
-        await CLIENT.send_message(message.channel,
-                                  "https://api.scryfall.com/cards/named?fuzzy=!{0}!&format=image"
-                                  .format(cname))
-
-    #----------------------------------------------------------------------------------------------#
-
-    elif message.content.startswith('!buybooster') or message.content.startswith('!vuyvooster'):
-        if not is_registered(user):
-            await CLIENT.send_message(message.channel,
-                                      "<@{0}>, you ain't registered!!".format(user))
-            return
-
-
-        if user in IN_TRANSACTION:
-            await CLIENT.send_message(message.channel, "<@{0}> you're currently in a transaction! ...guess I'll cancel it for you".format(user))
-            IN_TRANSACTION.remove(user)
-        args = message.content.split(maxsplit=2)[1:] # !buybooster set amount
-        card_set = args[0].upper()
-        amount = int(args[1]) if len(args) == 2 else 1
-
-        cardobj = load_mtgjson()
-        if card_set not in cardobj:
-            await CLIENT.send_message(message.channel,
-                                      "<@{0}> I don't know what set that is...".format(user))
-            return
-
-        setname = get_set_info(card_set)['name']
-        pack_price = get_booster_price(card_set)
-        price = pack_price * amount
-
-        if check_bux(user) < price:
-            await CLIENT.send_message(message.channel, "<@{0}> hey idiot why don't you come back with more money".format(user))
-            return
-
-        IN_TRANSACTION.append(user)
-        await CLIENT.send_message(message.channel, "<@{0}> Buy {1} {2} booster{plural} for ${3}?"
-                                  .format(user,
-                                          amount,
-                                          setname,
-                                          '%.2f' % float(price),
-                                          plural=("s" if amount > 1 else "")))
-
-        msg = await CLIENT.wait_for_message(timeout=15.0, author=message.author)
-        if not msg:
-            return
-        if (msg.content.startswith('y') or msg.content.startswith('Y')):
-            adjustbux(user, float(price) * -1)
-            result = give_booster(user, card_set, amount)
-        elif (msg.content.startswith('n') or msg.content.startswith('N')):
-            result = "well ok"
-        else:
-            result = None
-
-        if result:
-            await CLIENT.send_message(message.channel, "<@{0}> {1}".format(user, result))
-        IN_TRANSACTION.remove(user)
-
-    #----------------------------------------------------------------------------------------------#
-
-    elif message.content.startswith('!recordmatch'):
-        player_1, player_2 = message.content.split()[1:]
-        player_1_elo = get_user_record(player_1, "elo_rating")[0]
-        player_2_elo = get_user_record(player_2, "elo_rating")[0]
-
-        newelo = calc_elo_change(player_1_elo, player_2_elo)
-        bux_adjustment = 3.00 * (newelo[0] - player_1_elo)/32
-        bux_adjustment = float('%.2f'%bux_adjustment)
-
-        update_elo(player_1, newelo[0])
-        update_elo(player_2, newelo[1])
-
-        adjustbux(player_1, bux_adjustment)
-        await CLIENT.send_message(message.channel, player_1 + " new elo: " + str(newelo[0])
-                                  + "\n" +
-                                  player_2 + " new elo: " + str(newelo[1]) +
-                                  "\npayout: $" + str(bux_adjustment))
-
-    #----------------------------------------------------------------------------------------------#
-
-    elif message.content.startswith('!hash'):
-        thing_to_hash = message.content[len(message.content.split()[0]):]
-        hashed_thing = deckhash.make_deck_hash(*deckhash.convert_deck_to_boards(thing_to_hash))
-        await CLIENT.send_message(message.channel, 'hashed deck: ' + hashed_thing)
-
-    #----------------------------------------------------------------------------------------------#
-
-    elif message.content.startswith('!changenick') or message.content.startswith('!chamgemick'):
-        if not is_registered(user):
-            await CLIENT.send_message(message.channel,
-                                      "<@{0}>, you ain't registered!!".format(user))
-            return
-
-        nick = message.content.split()[1]
-        if not verify_nick(nick):
-            await CLIENT.send_message(message.channel,
-                                      ("user with nickname {0} already exists. " +
-                                       "don't try to confuse old maple you hear!!").format(nick))
-        else:
-            conn = sqlite3.connect('maple.db')
-            cursor = conn.cursor()
-            cursor.execute("UPDATE users SET name='" + nick + "' WHERE discord_id='" + user + "'")
-            conn.commit()
-            await CLIENT.send_message(message.channel, message.author.mention + " updated nickname")
-            conn.close()
-
-    #----------------------------------------------------------------------------------------------#
-
-    elif message.content.startswith('!userinfo') or message.content.startswith('!userimfo'):
-        if not is_registered(user):
-            await CLIENT.send_message(message.channel,
-                                      "<@{0}>, you aren't registered!! :surfer:".format(user))
-            return
-
-        conn = sqlite3.connect('maple.db')
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM users WHERE discord_id='" + user + "'")
-        result = cursor.fetchone()
-        outstring = '''*nickname*: {nick}
-                    *discord id*: {discord_id}
-                    *elo rating*: {elo}
-                    *maplebux*: {maplebux}'''.format(nick=result[1],
-                                                     discord_id=result[0],
-                                                     elo=result[2],
-                                                     maplebux=result[3])
-        outstring = re.sub(r'\n\s+', '\n', outstring)
-
-        await CLIENT.send_message(message.channel, outstring)
-        conn.close()
-
-    ################################################################################################
-    ################------------------------#### DEBUG/SETUP COMMANDS ####------------------------##
-    ################################################################################################
-
-    #----------------------------------------------------------------------------------------------#
-
-    if user not in DEBUG_WHITELIST:
-        return
-
-    elif message.content.startswith('!query'):
-        query = message.content[len(message.content.split()[0]):]
-        conn = sqlite3.connect('maple.db')
-        cursor = conn.cursor()
-        if ('DROP' in query.upper() and user != '234042140248899587'):
-            await CLIENT.send_message(message.channel, "pwease no droppy u_u")
-            return
-        outstring = ""
-        try:
-            cursor.execute(query)
-            for i in cursor.fetchall():
-                if len(outstring) > 1500:
-                    await CLIENT.send_message(message.channel, "```" + outstring + "\n```")
-                    outstring = ""
-                outstring += str(i) + "\n"
-        except sqlite3.OperationalError:
-            outstring = "sqlite operational error homie...\n" + str(sys.exc_info()[1])
-
-        if outstring == "":
-            outstring = "No output so it probably worked"
-        await CLIENT.send_message(message.channel, "```" + outstring + "```")
-        conn.commit()
-        conn.close()
-
-    #----------------------------------------------------------------------------------------------#
-
-    elif message.content.startswith('!elotest'):
-        winner = int(message.content.split()[1])
-        loser = int(message.content.split()[2])
-        new_r = calc_elo_change(winner, loser)
-        await CLIENT.send_message(message.channel, "```old winner rating: " + str(winner) +
-                                  "\nold loser rating: " + str(loser) +
-                                  "\n\nnew winner rating: " + str(new_r[0])  +
-                                  "\nnew loser rating: " + str(new_r[1]) + "```")
-
-    #----------------------------------------------------------------------------------------------#
-
-    elif message.content.startswith('!gutdump'):
-        table = ""
-        if len(message.content.split()) < 2:
-            table = "users"
-        else:
-            table = message.content.split()[1]
-
-        if table == "maple":
-            with open(__file__) as file:
-                out = file.read(1024)
-                while out:
-                    await CLIENT.send_message(message.channel,
-                                              "```"  + out.replace("```", "[codeblock]") + "```")
-                    out = file.read(1024)
-                    await asyncio.sleep(0.25)
-            return
-        conn = sqlite3.connect('maple.db')
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM " + table)
-        outstring = ""
-        names = [description[0] for description in cursor.description]
-        for i in cursor.fetchall():
-            if len(outstring) > 1500:
-                await CLIENT.send_message(message.channel,
-                                          "```" + str(names) + "\n\n" + outstring + "\n```")
-                outstring = ""
-            outstring += str(i) + "\n"
-        if outstring:
-            await CLIENT.send_message(message.channel,
-                                      "```" + str(names) + "\n\n" + outstring + "\n```")
-        conn.close()
-
-    #----------------------------------------------------------------------------------------------#
-
-    elif message.content.startswith('!setupdb') or message.content.startswith('!setupdv'):
-        conn = sqlite3.connect('maple.db')
-        cursor = conn.cursor()
-        cursor.execute('''CREATE TABLE IF NOT EXISTS users
-                     (discord_id TEXT, name TEXT, elo_rating INTEGER, cash REAL)''')
-
-        cursor.execute('''CREATE TABLE IF NOT EXISTS match_history
-                     (winner TEXT, loser TEXT, winner_deckhash TEXT, loser_deckhash TEXT, FOREIGN KEY(winner) REFERENCES users(discord_id), FOREIGN KEY(loser) REFERENCES users(discord_id))''')
-
-        cursor.execute('''CREATE TABLE IF NOT EXISTS cards
-                     (multiverse_id INTEGER PRIMARY KEY, card_name TEXT, card_set TEXT, card_type TEXT, rarity TEXT, colors TEXT, cmc TEXT)''')
-
-        cursor.execute('''CREATE TABLE IF NOT EXISTS collection
-                     (owner_id TEXT, multiverse_id INTEGER, amount_owned INTEGER,
-                     FOREIGN KEY(owner_id) REFERENCES users(discord_id), FOREIGN KEY(multiverse_id) REFERENCES cards(multiverse_id),
-                     PRIMARY KEY (owner_id, multiverse_id))''')
-
-        cursor.execute('''CREATE TABLE IF NOT EXISTS booster_inventory
-                     (owner_id TEXT, card_set TEXT, seed REAL, FOREIGN KEY(owner_id) REFERENCES users(discord_id), FOREIGN KEY(card_set) REFERENCES set_map(code))''')
-
-        cursor.execute('''CREATE TABLE IF NOT EXISTS set_map
-                     (name TEXT, code TEXT, alt_code TEXT, PRIMARY KEY (code, alt_code))''')
-
-        cursor.execute('''CREATE TABLE IF NOT EXISTS timestamped_base64_strings
-                     (name TEXT PRIMARY KEY, b64str TEXT, timestamp REAL)''')
-
-        cursor.execute('''CREATE TRIGGER IF NOT EXISTS delete_from_collection_on_zero
-                    AFTER UPDATE OF amount_owned ON collection BEGIN 
-                    DELETE FROM collection WHERE amount_owned < 1; 
-                    END''')
-        conn.commit()
-        conn.close()
-
-    #----------------------------------------------------------------------------------------------#
-
-    elif message.content.startswith('!populatesetinfo') or message.content.startswith('!populatesetimfo'):
-        #do not use load_mtgjson() here
-        with open ('AllSets.json', encoding="utf8") as f:
-            cardobj = json.load(f)
-        conn = sqlite3.connect('maple.db')
-        cursor = conn.cursor()
-        for card_set in cardobj:
-            print(cardobj[card_set]["name"])
-            name = ""
-            code = ""
-            alt_code = ""
-            if "name" in cardobj[card_set]:
-                name = cardobj[card_set]["name"]
-            if "code" in cardobj[card_set]:
-                code = cardobj[card_set]["code"]
-            if "magicCardsInfoCode" in cardobj[card_set]:
-                alt_code = cardobj[card_set]["magicCardsInfoCode"]
-            if code != "" and name != "":
-                cursor.execute("INSERT OR IGNORE INTO set_map VALUES (?, ?, ?)", (name, code, alt_code))
-        conn.commit()
-        conn.close()
-
-    #----------------------------------------------------------------------------------------------#
-
-    elif message.content.startswith('!populatecardinfo') or message.content.startswith('!populatecardimfo'):
-        #bot will time out while waiting for this to finish, so you know be careful out there
-        outstring = ""
-        cardobj = load_mtgjson()
-        setcount = 0
-        count = 0
-        for card_set in cardobj:
-            if "code" not in cardobj[card_set]:
-                continue
-            count += load_set_json(cardobj[card_set]['code'].upper())
-            setcount += 1
-            print(count, setcount)
-        print('added {0} cards from {1} sets'.format(count, setcount))
-
-    #----------------------------------------------------------------------------------------------#
-
-    elif message.content.startswith('!debugbooster') or message.content.startswith('!devugvooster'):
-        card_set = message.content.split()[1].upper()
-        seed = float(message.content.split()[2])
-        await CLIENT.send_message(message.channel, "```" + str(gen_booster(card_set, seed)) + "```")
-
-
-    #----------------------------------------------------------------------------------------------#
-
-    elif message.content.startswith('!mapletest'):
-        await CLIENT.send_message(message.channel, 'i\'m {0} and my guts are made of python 3.6, brah :surfer:'.format(CLIENT.user.name))
-
-    #----------------------------------------------------------------------------------------------#
-
-    elif message.content.startswith('!adjustbux') or message.content.startswith('!adjustvux'):
-        p1 = message.content.split()[1]
-        p2 = float(message.content.split()[2])
-        adjustbux(p1, p2)
-        await CLIENT.send_message(message.channel, "updated bux")
-
-    #----------------------------------------------------------------------------------------------#
-
-    elif message.content.startswith('!givebooster') or message.content.startswith('!givevooster'):
-
-
-        card_set = message.content.split()[1].upper()
-        if len(message.content.split()) > 2:
-            person_getting_booster = message.content.split()[2]
-        if len(message.content.split()) > 3:
-            amount = int(message.content.split()[3])
-        else:
-            amount = 1
-            person_getting_booster = user
-
-
-        result = give_booster(person_getting_booster, card_set, amount)
-        await CLIENT.send_message(message.channel, result)
-
-    #----------------------------------------------------------------------------------------------#
-
-    elif message.content.startswith('!loadsetjson') or message.content.startswith('!loadsetjsom'):
-        card_set = message.content.split()[1].upper()
-
-        result = load_set_json(card_set)
-        if result > -1:
-            await CLIENT.send_message(message.channel, 'added {0} cards from set {1}.'.format(result, card_set))
-        else:
-            await CLIENT.send_message(message.channel, 'set code {0} not found'.format(card_set))
-
-    #----------------------------------------------------------------------------------------------#
+    command = message.content.split()[0]
+
+    if (command in COMMANDS) and (command == "!register" or is_registered(user)):
+        await COMMANDS[command](user, message)
+    elif (command in DEBUG_COMMANDS) and (user in DEBUG_WHITELIST):
+        await DEBUG_COMMANDS[command](user, message)
 
 
 if __name__ == "__main__":
