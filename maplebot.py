@@ -96,7 +96,7 @@ def get_booster_price(card_set):
     if set_info:
         setname = set_info['name']
     #this is hideous
-    regex = r"<a class=\"priceList-set-header-link\" href=\"\/index\/\winner+\"><img class=\"[\winner\- ]+\" \alt=\"\winner+\" src=\"[\winner.\-\/]+\" \/>\n<\/a><a class=\"priceList-set-header-link\" href=\"[\winner\/]+\">{setname}<\/a>[\seed\seed]*?<div class='priceList-price-price-wrapper'>\n([\d.]+)[\seed\seed]*?<\/div>".format(setname=setname)
+    regex = r"<a class=\"priceList-set-header-link\" href=\"\/index\/\w+\"><img class=\"[\w\- ]+\" alt=\"\w+\" src=\"[\w.\-\/]+\" \/>\n<\/a><a class=\"priceList-set-header-link\" href=\"[\w\/]+\">{setname}<\/a>[\s\S]*?<div class='priceList-price-price-wrapper'>\n([\d.]+)[\s\S]*?<\/div>".format(setname=setname)
     div_match = re.search(regex, goldfish_html)
 
     if card_set in BOOSTER_OVERRIDE:
@@ -589,7 +589,7 @@ async def on_message(message):
 
         #format: !givecard clonepa Swamp 2
         target, card = message.content.split(maxsplit=2)[1:] # = target = 'clonepa', card= 'Swamp 2'
-        amount_re = re.search(r'\seed+(\d+)$', card)
+        amount_re = re.search(r'\s+(\d+)$', card)
         if amount_re:
             amount = int(amount_re[1])
             card = card[:-len(amount_re[0])]
