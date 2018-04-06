@@ -589,14 +589,12 @@ async def on_message(message):
 
         #format: !givecard clonepa Swamp 2
         target, card = message.content.split(maxsplit=2)[1:] # = target = 'clonepa', card= 'Swamp 2'
-        print('pre', message.content.split(maxsplit=2)[1:])
         amount_re = re.search(r'\s+(\d+)$', card)
         if amount_re:
             amount = int(amount_re[1])
             card = card[:-len(amount_re[0])]
         else:
             amount = 1
-        print('post', card)
 
         result_dict = give_card(user, target, card, amount)
 
