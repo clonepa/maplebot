@@ -553,48 +553,6 @@ async def cmd_register(user, message):
         cursor.execute("INSERT INTO users VALUES ('" + user + "','" + nickname + "',1500,50.00)")
         conn.commit()
         conn.close()
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-        return
-
-    #----------------------------------------------------------------------------------------------#
-
-    #----------------------------------------------------------------------------------------------#
-
-    if message.content.startswith('!givecard'):
-        if not is_registered(user):
-            await CLIENT.send_message(message.channel,
-                                      "<@{0}>, you ain't registered!!".format(user))
-            return
-
-        #format: !givecard clonepa Swamp 2
-        target, card = message.content.split(maxsplit=2)[1:] # = target = 'clonepa', card= 'Swamp 2'
-        amount_re = re.search(r'\s+(\d+)$', card)
-        if amount_re:
-            amount = int(amount_re[1])
-            card = card[:-len(amount_re[0])]
-        else:
-            amount = 1
-
-        result_dict = give_card(user, target, card, amount)
-
-        reply_dict = {
-            0: "gave {0} {1} to <@{2}>!".format(amount,
-                                                result_dict['card_name'],
-                                                result_dict['target_id']),
-            1: "that's not a valid recipient!!",
-            2: "hey, you don't have that card at all!",
-            3: "hold up, you only have {0} of {1}!!".format(result_dict['amount_owned'],
-                                                            result_dict['card_name']),
-            4: "now that's just silly",
-            5: "you only have {0} of that printing of {1}!".format(result_dict['amount_owned'],
-                                                                   result_dict['card_name'])
-        }
->>>>>>> master
-
-=======
->>>>>>> bdd926cb46b8d36553dd8da283e3e3a1848748a4
         give_homie_some_lands(user)
         give_booster(user, "M13", 15)
         await CLIENT.send_message(message.channel, 'created user in database with ID ' + user +
