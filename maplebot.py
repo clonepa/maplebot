@@ -12,6 +12,7 @@ import collections
 import requests
 import discord
 
+import mtg
 import deckhash
 import mapleconfig
 
@@ -353,18 +354,23 @@ def load_set_json(card_set):
     cursor = conn.cursor()
     if card_set in cardobj:
         for card in cardobj[card_set]['cards']:
+            # skip card if it's the back side of a double-faced card
+            if card['layout'] == 'double-faced' and not card['mciNumber'].endswith('a'):
+                print('card {0} is double-faced and not front, skipping'.format(card['name']))
+                continue
             # if multiverseID doesn't exist, generate fallback negative multiverse ID using set and name as seed
             if 'multiverseid' in card:
                 mvid = card['multiverseid']
             else:
                 random.seed(card['name'] + card_set)
                 mvid = -random.randrange(100000000)
-                #print('IDless card {0} assigned fallback ID {1}'.format(card['name'], mvid))
+                # print('IDless card {0} assigned fallback ID {1}'.format(card['name'], mvid))
             if not 'colors' in card:
                 colors = "Colorless"
             else:
                 colors = ",".join(card['colors'])
-            cursor.execute("INSERT OR IGNORE INTO cards VALUES(?, ?, ?, ?, ?, ?, ?)", (mvid, card['name'], card_set, card['type'], card['rarity'], colors, card['cmc']) )
+            cursor.execute("INSERT OR IGNORE INTO cards VALUES(?, ?, ?, ?, ?, ?, ?)",
+                           (mvid, card['name'], card_set, card['type'], card['rarity'], colors, card['cmc']))
             count += 1
         conn.commit()
         conn.close()
@@ -543,7 +549,7 @@ def make_ptpb(text):
     response = requests.post('https://ptpb.pw/', data={"content": text})
     return next(i.split()[1] for i in response.text.split('\n') if i.startswith('url:'))
 
-async def cmd_register(user, message):
+async def cmd_register(user, message, client=CLIENT):
     nickname = message.content.split()[1]
     conn = sqlite3.connect('maple.db')
     cursor = conn.cursor()
@@ -566,7 +572,7 @@ async def cmd_register(user, message):
     conn.close()
     return 
 
-async def cmd_givecard(user, message):
+async def cmd_givecard(user, message, client=CLIENT):
     #format: !givecard clonepa Swamp 2
     target, card = message.content.split(maxsplit=2)[1:] # = target = 'clonepa', card= 'Swamp 2'
     amount_re = re.search(r'\seed+(\d+)$', card)
@@ -594,7 +600,7 @@ async def cmd_givecard(user, message):
     await CLIENT.send_message(message.channel,
                               "<@{0}> {1}".format(user, reply_dict[result_dict['code']]))
 
-async def cmd_exportcollection(user, message):
+async def cmd_exportcollection(user, message, client=CLIENT):
     await CLIENT.send_typing(message.channel)
     exported_collection = export_collection_to_sideboard(user)
 
@@ -606,7 +612,7 @@ async def cmd_exportcollection(user, message):
         .format(user, pb_url)
     )
 
-async def cmd_checkdeck(user, message):
+async def cmd_checkdeck(user, message, client=CLIENT):
     deck = message.content[len(message.content.split()[0]):].strip()
     missing_cards = validate_deck(deck, user)
 
@@ -622,7 +628,7 @@ async def cmd_checkdeck(user, message):
                                   "<@{0}> has submitted a collection-valid deck! hash: `{1}`"
                                   .format(user, hashed_deck))
         
-async def cmd_packprice(user, message):
+async def cmd_packprice(user, message, client=CLIENT):
     '''!packprice [setcode]
     returns mtgo booster pack price for the set via mtggoldfish'''
     card_set = message.content.split()[1].upper()
@@ -637,12 +643,12 @@ async def cmd_packprice(user, message):
 
     await CLIENT.send_message(message.channel, out)
 
-async def cmd_checkbux(user, message):
+async def cmd_checkbux(user, message, client=CLIENT):
     await CLIENT.send_message(message.channel,
                               "<@{0}> your maplebux balance is: ${1}"
                               .format(user, '%.2f'%check_bux(user)))
 
-async def cmd_givebux(user, message):
+async def cmd_givebux(user, message, client=CLIENT):
     player_1 = message.content.split()[1]
     player_2 = float('%.2f'%float(message.content.split()[2]))
     myself = user
@@ -679,7 +685,7 @@ async def cmd_givebux(user, message):
     await CLIENT.send_message(message.channel, "sent ${0} to {1}".format(player_2, player_1))
     conn.close()
 
-async def cmd_openbooster(user, message):
+async def cmd_openbooster(user, message, client=CLIENT):
     args = message.content.split(maxsplit=2)[1:]
     if len(args) < 2:
         amount = 1
@@ -713,14 +719,14 @@ async def cmd_openbooster(user, message):
         await CLIENT.send_message(message.channel, "<@{0}> don't have any of those homie!!"
                                   .format(user))
     
-async def cmd_maplecard(user, message):
+async def cmd_maplecard(user, message, client=CLIENT):
     cname = message.content[len(message.content.split()[0]):]
     cname = cname.replace(" ", "%20")
     await CLIENT.send_message(message.channel,
                               "https://api.scryfall.com/cards/named?fuzzy=!{0}!&format=image"
                               .format(cname))
     
-async def cmd_buybooster(user, message):
+async def cmd_buybooster(user, message, client=CLIENT):
     if user in IN_TRANSACTION:
         await CLIENT.send_message(message.channel, "<@{0}> you're currently in a transaction! ...guess I'll cancel it for you".format(user))
         IN_TRANSACTION.remove(user)
@@ -765,7 +771,7 @@ async def cmd_buybooster(user, message):
         await CLIENT.send_message(message.channel, "<@{0}> {1}".format(user, result))
     IN_TRANSACTION.remove(user)
 
-async def cmd_recordmatch(user, message):
+async def cmd_recordmatch(user, message, client=CLIENT):
     player_1, player_2 = message.content.split()[1:]
     player_1_elo = get_user_record(player_1, "elo_rating")[0]
     player_2_elo = get_user_record(player_2, "elo_rating")[0]
@@ -784,12 +790,12 @@ async def cmd_recordmatch(user, message):
                               player_2 + " new elo: " + str(newelo[1]) +
                               "\npayout: $" + str(bux_adjustment))
     
-async def cmd_hash(user, message):
+async def cmd_hash(user, message, client=CLIENT):
     thing_to_hash = message.content[len(message.content.split()[0]):]
     hashed_thing = deckhash.make_deck_hash(*deckhash.convert_deck_to_boards(thing_to_hash))
     await CLIENT.send_message(message.channel, 'hashed deck: ' + hashed_thing)
 
-async def cmd_changenick(user, message):
+async def cmd_changenick(user, message, client=CLIENT):
     nick = message.content.split()[1]
     if not verify_nick(nick):
         await CLIENT.send_message(message.channel,
@@ -803,7 +809,7 @@ async def cmd_changenick(user, message):
         await CLIENT.send_message(message.channel, message.author.mention + " updated nickname")
         conn.close()
 
-async def cmd_userinfo(user, message):
+async def cmd_userinfo(user, message, client=CLIENT):
     conn = sqlite3.connect('maple.db')
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM users WHERE discord_id='" + user + "'")
@@ -820,7 +826,7 @@ async def cmd_userinfo(user, message):
     await CLIENT.send_message(message.channel, outstring)
     conn.close()
 
-async def cmd_query(user, message):
+async def cmd_query(user, message, client=CLIENT):
     query = message.content[len(message.content.split()[0]):]
     conn = sqlite3.connect('maple.db')
     cursor = conn.cursor()
@@ -844,7 +850,7 @@ async def cmd_query(user, message):
     conn.commit()
     conn.close()
     
-async def cmd_gutdump(user, message):
+async def cmd_gutdump(user, message, client=CLIENT):
     table = ""
     if len(message.content.split()) < 2:
         table = "users"
@@ -876,7 +882,7 @@ async def cmd_gutdump(user, message):
                                   "```" + str(names) + "\n\n" + outstring + "\n```")
     conn.close()
 
-async def cmd_setupdb(user, message):
+async def cmd_setupdb(user, message, client=CLIENT):
     conn = sqlite3.connect('maple.db')
     cursor = conn.cursor()
     cursor.execute('''CREATE TABLE IF NOT EXISTS users
@@ -909,7 +915,7 @@ async def cmd_setupdb(user, message):
     conn.commit()
     conn.close()
 
-async def cmd_populatesetinfo(user, message):
+async def cmd_populatesetinfo(user, message, client=CLIENT):
     #do not use load_mtgjson() here
     with open ('AllSets.json', encoding="utf8") as f:
         cardobj = json.load(f)
@@ -931,7 +937,7 @@ async def cmd_populatesetinfo(user, message):
     conn.commit()
     conn.close()
     
-async def cmd_populatecardinfo(user, message):
+async def cmd_populatecardinfo(user, message, client=CLIENT, set=None):
     #bot will time out while waiting for this to finish, so you know be careful out there
     outstring = ""
     cardobj = load_mtgjson()
@@ -945,7 +951,7 @@ async def cmd_populatecardinfo(user, message):
         print(count, setcount)
     print('added {0} cards from {1} sets'.format(count, setcount))
     
-async def cmd_givebooster(user, message):
+async def cmd_givebooster(user, message, client=CLIENT):
     card_set = message.content.split()[1].upper()
     if len(message.content.split()) > 2:
         person_getting_booster = message.content.split()[2]
@@ -959,13 +965,13 @@ async def cmd_givebooster(user, message):
     result = give_booster(person_getting_booster, card_set, amount)
     await CLIENT.send_message(message.channel, result)
         
-async def cmd_adjustbux(user, message):
+async def cmd_adjustbux(user, message, client=CLIENT):
     p1 = message.content.split()[1]
     p2 = float(message.content.split()[2])
     adjustbux(p1, p2)
     await CLIENT.send_message(message.channel, "updated bux")
         
-async def cmd_loadsetjson(user, message):
+async def cmd_loadsetjson(user, message, client=CLIENT):
     card_set = message.content.split()[1].upper()
 
     result = load_set_json(card_set)
@@ -975,7 +981,7 @@ async def cmd_loadsetjson(user, message):
         await CLIENT.send_message(message.channel, 'set code {0} not found'.format(card_set))
 
 
-async def cmd_mapletest(user, message):
+async def cmd_mapletest(user, message, client=CLIENT):
     await CLIENT.send_message(message.channel, "i'm {0} and my guts are made of python 3.6, brah :surfer:".format(CLIENT.user.name))
 
 
@@ -987,7 +993,8 @@ COMMANDS = {"register": cmd_register,
             "checkbux": cmd_checkbux,
             "givebux": cmd_givebux,
             "openbooster": cmd_openbooster,
-            "maplecard": cmd_maplecard,
+            "maplecard": mtg.cmd_cardinfo,
+            "cardsearch": mtg.cmd_cardsearch,
             "buybooster": cmd_buybooster,
             "recordmatch": cmd_recordmatch,
             "hash": cmd_hash,
@@ -1021,12 +1028,12 @@ async def on_message(message):
 
         if command in COMMANDS:
             if command == "register" or is_registered(user):
-                await COMMANDS[command](user, message)
+                await COMMANDS[command](user, message, client=CLIENT)
             else:
                 await CLIENT.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
         elif command in DEBUG_COMMANDS:
             if (user in DEBUG_WHITELIST):
-                await DEBUG_COMMANDS[command](user, message)
+                await DEBUG_COMMANDS[command](user, message, client=CLIENT)
             else:
                 await CLIENT.send_message(message.channel, "<@{0}> that's a debug command, you rascal!".format(user))
 
