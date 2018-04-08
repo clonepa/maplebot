@@ -249,7 +249,7 @@ def gen_booster(card_set, seeds):
                                    {"chosen_card_id": chosen_card_id})
                     chosen_card = cursor.fetchone()
                     generated_booster.append(chosen_card)
-            outbooster += [{"rowid": seed['rowid'], "booster": generated_booster}]
+            outbooster += [{"rowid": seed['rowid'], "booster": generated_booster, "seed": seed['seed']}]
     cursor.connection.close()
     return outbooster
 
@@ -289,7 +289,7 @@ def give_booster(owner, card_set, amount=1):
     u = cursor.fetchone()[0]
     for i in range(amount):
         random.seed()
-        booster_seed = random.random()
+        booster_seed = random.getrandbits(32)
         cursor.execute("INSERT INTO booster_inventory VALUES (:owner, :cset, :seed)", {"owner": u, "cset": card_set, "seed": booster_seed})
     conn.commit()
     conn.close()
@@ -340,8 +340,11 @@ def open_booster(owner, card_set, amount):
             
         if outstring == "":
             outstring = "It was empty... !"
+
+          
+        opened_boosters.append({"cards": outstring, "seed": generated_booster['seed']})
         cursor.execute("DELETE FROM booster_inventory WHERE rowid=:rowid", {"rowid": int(generated_booster["rowid"])})
-        opened_boosters.append(outstring)
+        
     conn.commit()
     conn.close()
     return opened_boosters
@@ -701,20 +704,22 @@ async def cmd_openbooster(user, message, client=CLIENT):
     await CLIENT.send_typing(message.channel)
     boosters_list = open_booster(user, card_set, amount)
     boosters_opened = len(boosters_list)
+    print (boosters_list)
     if boosters_opened == 1:
         await CLIENT.send_message(message.channel,
-                                  "<@{0}>\n```{1}```".format(user, boosters_list[0]))
+                                  "<@{0}>\n```{1}```\nhttp://qubeley.biz/mtg/booster/{2}/{3}".format(user, boosters_list[0]['cards'], card_set, boosters_list[0]['seed']))
     elif boosters_opened > 1:
         outstring = "{0} opened {1} boosters by {2}:\n\n".format(boosters_opened,
                                                                  card_set,
                                                                  message.author.display_name)
         for i, booster in enumerate(boosters_list):
             outstring += "------- Booster #{0} -------\n".format(i + 1)
-            outstring += booster + '\n'
+            outstring += booster['cards'] + '\n'
         pb_url = make_ptpb(outstring)
         await CLIENT.send_message(message.channel,
                                   "<@{0}>, your {1} opened {2} boosters: {3}"
                                   .format(user, boosters_opened, card_set, pb_url))
+        
     else:
         await CLIENT.send_message(message.channel, "<@{0}> don't have any of those homie!!"
                                   .format(user))
@@ -900,7 +905,7 @@ async def cmd_setupdb(user, message, client=CLIENT):
                  PRIMARY KEY (owner_id, multiverse_id))''')
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS booster_inventory
-                 (owner_id TEXT, card_set TEXT, seed REAL, FOREIGN KEY(owner_id) REFERENCES users(discord_id), FOREIGN KEY(card_set) REFERENCES set_map(code))''')
+                 (owner_id TEXT, card_set TEXT, seed INTEGER, FOREIGN KEY(owner_id) REFERENCES users(discord_id), FOREIGN KEY(card_set) REFERENCES set_map(code))''')
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS set_map
                  (name TEXT, code TEXT, alt_code TEXT, PRIMARY KEY (code, alt_code))''')
