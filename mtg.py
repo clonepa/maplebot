@@ -1,4 +1,5 @@
 import asyncio
+import sqlite3
 
 import requests
 
@@ -37,17 +38,21 @@ async def cmd_cardinfo(user, message, client=None):
     printings_list_string = ', '.join(other_printings[:8]) + \
                             (' and {0} others'.format(len(other_printings) - 8) if len(other_printings) > 8 else '')
     printings_string = 'Also printed in: {0}'.format(printings_list_string) if other_printings else ''
+    multiverse_id = card['multiverse_ids'][0] if card['multiverse_ids'] else None
+    if multiverse_id:
+        gatherer_string = 'http://gatherer.wizards.com/Pages/Card/Details.aspx?multiverseid={0}'.format(multiverse_id)
+    else:
+        gatherer_string = "this card has no gatherer page. must be something weird or pretty new...!"
     reply_string = ['<@{user}>',
                     more_string,
                     '**{card_name}**',
                     'Set: {card_set}',
                     printings_string,
-                    'http://gatherer.wizards.com/Pages/Card/Details.aspx?multiverseid={multiverse_id}',
+                    gatherer_string,
                     '{card_image}']
     reply_string = '\n'.join(reply_string).format(user=user,
                                                   card_name=card['name'],
                                                   card_set=card['set'].upper(),
-                                                  multiverse_id=card['multiverse_ids'][0],
                                                   card_image=card['image_uris']['large'])
     await client.send_message(message.channel, reply_string)
 
@@ -74,3 +79,24 @@ async def cmd_cardsearch(user, message, client=None):
                                                                                mana_cost=card['mana_cost'],
                                                                                type_line=card['type_line'])
     await client.send_message(message.channel, reply_string)
+
+
+async def cmd_hascard(user, message, client=None):
+    cursor = sqlite3.connect('maple.db').cursor()
+    target, card = message.content.split(maxsplit=2)[1:]  # !hascard ari swamp
+
+    cursor.execute('''SELECT cards.card_name, users.name, SUM(collection.amount_owned) FROM collection
+                   INNER JOIN cards ON collection.multiverse_id = cards.multiverse_id
+                   INNER JOIN users ON collection.owner_id      = users.discord_id
+                   WHERE cards.card_name LIKE :card
+                   AND (users.name LIKE :target  OR  users.discord_id LIKE :target)
+                   GROUP BY cards.card_name''',
+                   {'card': card, 'target': target})
+    result = cursor.fetchone()
+    if not result:
+        await client.send_message(message.channel, '<@{0}> {1} has no card named "{2}"'.format(user, target, card))
+        return
+    await client.send_message(message.channel, '<@{user}> {target} has {amount} of {card}'.format(user=user,
+                                                                                                  target=result[1],
+                                                                                                  amount=result[2],
+                                                                                                  card=result[0]))
