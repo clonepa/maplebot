@@ -714,7 +714,7 @@ async def cmd_openbooster(user, message, client=CLIENT):
                                                                  message.author.display_name)
         for i, booster in enumerate(boosters_list):
             outstring += "------- Booster #{0} -------\n".format(i + 1)
-            outstring += booster['bstring'] + '\n'
+            outstring += booster['cards'] + '\n'
         pb_url = make_ptpb(outstring)
         await CLIENT.send_message(message.channel,
                                   "<@{0}>, your {1} opened {2} boosters: {3}"
