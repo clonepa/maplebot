@@ -21,7 +21,7 @@
 	<div class="container">
 		<div class="row">
 		{% for card in cards%}
-			<img style="max-height: 600px;" src="https://api.scryfall.com/cards/multiverse/{{ card[0] }}?format=image">
+			<img style="max-height: 600px;" src="https://api.scryfall.com/cards/multiverse/{{ card[0] }}?format=image&version=normal">
 		{% endfor %}
 		</div>
 	</div>
