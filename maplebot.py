@@ -1020,7 +1020,6 @@ async def on_ready():
     print(CLIENT.user.name)
     print(CLIENT.user.id)
     print('------')
-    print(await bottalk.make_request(CLIENT, '126886389617786882', 'sup dogg', timeout=60))
 
 
 @CLIENT.event
