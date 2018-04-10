@@ -9,10 +9,8 @@ SYNTAX_REGEX = re.compile(r'^bot_talk_(req|res)#([0-9a-f]{30})#(.*)$')
 
 
 async def get_request(client, message):
-    if not message.channel.is_private:
+    if (not message.channel.is_private) or (not message.author.bot):
         return
-
-    # TODO: CHECK IF SENDER IS BOT
 
     parsed_message = SYNTAX_REGEX.match(message.content)
     if (not parsed_message) or parsed_message.group(1) != 'req':
