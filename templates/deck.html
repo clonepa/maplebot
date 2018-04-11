@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>maplebot back at it</title>
+
+	<script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+	<script src="https://cdn.datatables.net/1.10.16/js/jquery.dataTables.min.js"></script>
+	<script src="https://cdn.datatables.net/select/1.2.5/js/dataTables.select.min.js"></script>
+	<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+	<script src="https://cdn.datatables.net/buttons/1.5.1/js/dataTables.buttons.min.js"></script>
+	<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.16/css/jquery.dataTables.min.css">
+	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+	<link rel="stylesheet" href="https://cdn.datatables.net/select/1.2.5/css/select.dataTables.min.css">
+	<link rel="stylesheet" href="https://cdn.datatables.net/buttons/1.5.1/css/buttons.dataTables.min.css">
+	<style>
+	@media (min-width: 1200px) {
+    .container{
+        max-width: 1280px;
+        width: 1280px;
+	    }
+	}
+	</style>
+	<script>
+		var dataSet2 = [];
+		var deckData = [];
+		{% if user %}
+    	{% for card in collection %}
+    		//dataSet.push([ {{ card.amount }}, "{{ card.name }}", "{{ card.set }}", "{{ card.type }}", "{{ card.rarity }}", "{{ card.color }}" ])
+    		//console.log("{{ card.name }}","{{ card.set }}")
+
+    		//build combined printings array
+    		var foundit = false
+    		for (var i = dataSet2.length - 1; i >= 0; i--) {
+    			if (dataSet2[i][1] == "{{ card.name }}"){
+    				dataSet2[i][0] += {{ card.amount }}
+    			    foundit = true
+    			    if( $.inArray("{{ card.set }}", dataSet2[i][2]) < 0)
+    			    	dataSet2[i][2].push("{{ card.set }}")
+    			}    
+         	}
+         	if (!foundit) {
+         		dataSet2.push([ {{ card.amount }}, "{{ card.name }}", ["{{ card.set }}"], "{{ card.type }}", "{{ card.rarity }}", "{{ card.color }}", {{ card.multiverseid }} ])
+         	}
+         {% endfor %}
+
+    	
+		$(document).ready(function() {
+			var addbtn = document.getElementById('add');
+
+		    var table = $('#collection').DataTable( {
+		        data: dataSet2,
+		        select: true,
+		        columns: [
+		            { title: "Amount" },
+		            { title: "Name" },
+		            { title: "Set" },
+		            { title: "Type" },
+		            { title: "Rarity" },
+		            { title: "Color"},
+		            { title: "MVerse ID"}],
+
+		         "columnDefs": [
+            	{
+                "targets": [ 6 ],
+                "visible": false  
+            	}]
+		    } );
+		    var table2 = $('#decklist').DataTable( {
+		        data: deckData,
+		        select: true,
+		        columns: [
+		            { title: "Amount" },
+		            { title: "Name" },
+		            { title: "Set" },
+		            { title: "Type" },
+		            { title: "Rarity" },
+		            { title: "Color"},
+		            { title: "MVerse ID"}],
+
+		         "columnDefs": [
+            	{
+                "targets": [ 6 ],
+                "visible": false  
+            	}]
+		    } );
+		    $('#collection tbody').on('click', 'tr', function () {
+        		var data = table.row( this ).data();
+        		if (data[6] > 0)
+        			$("#img-card").attr("src","https://api.scryfall.com/cards/multiverse/" + encodeURIComponent(data[6]) + "?format=image&version=normal");
+        		else
+        			$("#img-card").attr("src","https://api.scryfall.com/cards/named?fuzzy=!" + encodeURIComponent(data[1]) + "!&format=image&version=normal");
+    		} );
+    		$('#decklist tbody').on('click', 'tr', function () {
+        		var data = table2.row( this ).data();
+        		if (data[6] > 0)
+        			$("#img-card").attr("src","https://api.scryfall.com/cards/multiverse/" + encodeURIComponent(data[6]) + "?format=image&version=normal");
+        		else
+        			$("#img-card").attr("src","https://api.scryfall.com/cards/named?fuzzy=!" + encodeURIComponent(data[1]) + "!&format=image&version=normal");
+    		} );
+
+    		addbtn.addEventListener('click',function(event){
+				var items = table.rows( {selected: true} ).data();
+				for (var i = items.length - 1; i >= 0; i--) {
+					console.log(items[i]);
+					for (var o = dataSet2.length - 1; o >= 0; o--) {
+						if (items[i][6] == dataSet2[o][6]){
+							var foundit = false;
+							for (var n = deckData.length - 1; n >= 0; n--) {
+								if (items[i][6] == deckData[n][6]){
+									foundit = true;
+									if(deckData[i][0] < items[i][0] ){
+										deckData[n][0] += 1;	
+									
+									}
+										
+								} 
+							}
+							if (!foundit){	
+								deckData.push(Object.assign({}, items[i]));
+								deckData[deckData.length - 1][0] = 1;
+							}
+						}
+					}
+				}
+				table.rows( {selected: true} ).select();
+				$('#decklist').dataTable().fnClearTable();
+				$('#decklist').dataTable().fnAddData(deckData);
+				$('#collection').dataTable().fnClearTable();
+				$('#collection').dataTable().fnAddData(dataSet2);
+			});
+		    {% endif %}
+		} );
+	</script>
+</head>
+<body>
+	<div class="container">
+		{% if user %}
+		<div class="row">
+			<div class="col-md-12">
+				<h2>{{ user[1] }}</h2>
+			</div>
+		</div>
+		<div class="row">
+			<div class="col-md-8">
+				<button id="add">Add selected to Deck</button>
+				<table id="collection" class="display"></table>
+			</div>
+			<div class="col-md-4">
+				<img id="img-card" style="max-height: 500px" src="https://i.imgur.com/tctVXhW.jpg">
+			</div>
+		</div>
+		<div class="row" style="margin-top: 25px;">
+			<div class="col-md-12">
+				<h3>Decklist:</h3>
+				<button id="remove">Remove selected from Deck</button>
+				<button id="export">Export Deck</button>
+				<table id="decklist" class="display"></table>
+			</div>
+		</div>
+		{% else %}
+		<h1>back at it again</h1>
+		{% endif %}
+	</div>
+</body>
+</html>
