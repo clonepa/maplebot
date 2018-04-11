@@ -1084,7 +1084,7 @@ async def on_message(message):
                 await DEBUG_COMMANDS[command](user, message, client=CLIENT)
             else:
                 await CLIENT.send_message(message.channel, "<@{0}> that's a debug command, you rascal!".format(user))
-    elif message.channel.is_private:
+    else:
         bottalk_request = await bottalk.get_request(CLIENT, message)
         if bottalk_request:
             try:
