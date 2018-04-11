@@ -12,6 +12,7 @@ import collections
 import requests
 import discord
 
+import bottalk
 import mtg
 import deckhash
 import mapleconfig
@@ -1028,6 +1029,8 @@ async def on_ready():
 
 @CLIENT.event
 async def on_message(message):
+    if message.author == CLIENT.user:
+        return
     if message.content.startswith('!'):
         user = str(message.author.id)
         command = message.content.split()[0][1:]
@@ -1042,6 +1045,13 @@ async def on_message(message):
                 await DEBUG_COMMANDS[command](user, message, client=CLIENT)
             else:
                 await CLIENT.send_message(message.channel, "<@{0}> that's a debug command, you rascal!".format(user))
+    elif message.channel.is_private:
+        bottalk_request = await bottalk.get_request(CLIENT, message)
+        if bottalk_request:
+            try:
+                await bottalk.respond_request(CLIENT, message.author, bottalk_request[0], eval(bottalk_request[1]))
+            except Exception as exc:
+                await bottalk.respond_request(CLIENT, message.author, bottalk_request[0], exc)
 
 if __name__ == "__main__":
     CLIENT.run(TOKEN)
