@@ -990,7 +990,45 @@ async def cmd_loadsetjson(user, message, client=CLIENT):
 async def cmd_mapletest(user, message, client=CLIENT):
     await CLIENT.send_message(message.channel, "i'm {0} and my guts are made of python 3.6, brah :surfer:".format(CLIENT.user.name))
 
+async def cmd_coinbet(user, message, client=CLIENT):
+    pcall = message.content.split()[1]
+    pbet = float(message.content.split()[2])
 
+    if not pbet:
+        await CLIENT.send_message(message.channel, 'gotta pony up cowboy')
+        return
+    if pbet < 0.01:
+        await CLIENT.send_message(message.channel, 'no microtrading allowed')
+        return
+    if check_bux(user) < pbet:
+        await CLIENT.send_message(message.channel, "you don't have that kind of cash!")
+        return
+    
+    rigged_coin = ["heads"] * 3 + ["tails"] * 3 + ["side"]
+    if pcall.lower() != "heads" and pcall.lower() != "tails":
+        await CLIENT.send_message(message.channel, 'heads or tails only, dirtbag')
+        return
+    await CLIENT.send_message(message.channel, "<@{0}> you called {1}. I'm flipping the coin...".format(user, pcall.lower()))
+    await CLIENT.send_typing(message.channel)
+    await asyncio.sleep(1.25)
+    result = random.choice(rigged_coin)
+    outstring = ""
+    payout = 0
+    winner = (pcall.lower() == result)
+    if winner:
+        payout = pbet
+        outstring = "you called it!! you won ${0}! enjoy your fat stack ".format('%.2f'%pbet)
+    else:
+        payout = pbet * -1
+        outstring = "you beefed it!!"
+    adjustbux(user, payout)
+
+    if result != "side":
+        await CLIENT.send_message(message.channel, "<@{0}> it was {1}... {2}".format(user,result,outstring))
+    else:
+        await CLIENT.send_message(message.channel, "<@{0}> it landed on its side?! wow, guess I win!".format(user))
+    
+        
 COMMANDS = {"register": cmd_register,
             "givecard": cmd_givecard,
             "exportcollection": cmd_exportcollection,
@@ -1007,7 +1045,8 @@ COMMANDS = {"register": cmd_register,
             "hash": cmd_hash,
             "changenick": cmd_changenick,
             "userinfo": cmd_userinfo,
-            "mapletest": cmd_mapletest}
+            "mapletest": cmd_mapletest,
+            "coinbet": cmd_coinbet}
 
 DEBUG_COMMANDS = {"query": cmd_query,
                   "gutdump": cmd_gutdump,
