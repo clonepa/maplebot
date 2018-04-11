@@ -60,8 +60,8 @@
 		    } );
 		    $('#collection tbody').on('click', 'tr', function () {
         		var data = table.row( this ).data();
-        		if (data[5] > 0)
-        			$("#img-card").attr("src","https://api.scryfall.com/cards/multiverse/" + encodeURIComponent(data[5]) + "?format=image");
+        		if (data[6] > 0)
+        			$("#img-card").attr("src","https://api.scryfall.com/cards/multiverse/" + encodeURIComponent(data[6]) + "?format=image");
         		else
         			$("#img-card").attr("src","https://api.scryfall.com/cards/named?fuzzy=!" + encodeURIComponent(data[1]) + "!&format=image");
     		} );

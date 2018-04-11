@@ -21,5 +21,14 @@ def booster(cset=None, seed=None):
         print(cards)
     return render_template('booster.html',cards=cards)
 
+@app.route('/deckbuilder/<user>')
+def deckbuilder(user=None):
+    user_record = None
+    collection = None
+    if user:
+        user_record= maplebot.get_user_record(user)
+        collection = maplebot.export_collection_to_list(user)
+    return render_template('deck.html',user=user_record,collection=collection)
+
 if __name__ == "__main__":
     app.run(port=7172)
