@@ -1009,7 +1009,7 @@ async def cmd_coinbet(user, message, client=CLIENT):
         await CLIENT.send_message(message.channel, 'heads or tails only, dirtbag')
         return
     if pcall == "side":
-        await CLIENT.send_message(message.channel, "<@{0}> you called {1}...? ok well, I'm flipping the coin...".format(user, pcall.lower()))
+        await CLIENT.send_message(message.channel, "<@{0}> you called... {1}? ok well, I'm flipping the coin.".format(user, pcall.lower()))
     else:
         await CLIENT.send_message(message.channel, "<@{0}> you called {1}. I'm flipping the coin...".format(user, pcall.lower()))
     await CLIENT.send_typing(message.channel)
@@ -1021,10 +1021,10 @@ async def cmd_coinbet(user, message, client=CLIENT):
     if winner:
         if result == "side":
             payout = pbet * len(rigged_coin)
-            outstring = "you called it!! you won ${0}! big time gambler bonus!".format('%.2f'%pbet)
+            outstring = "somehow, you called it!! you won ${0}! big time gambler bonus!".format('%.2f'%payout)
         else:
             payout = pbet
-            outstring = "you called it!! you won ${0}! enjoy your fat stack ".format('%.2f'%pbet)
+            outstring = "you called it!! you won ${0}! enjoy your fat stack ".format('%.2f'%payout)
     else:
         payout = pbet * -1
         if result == "side":
