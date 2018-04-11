@@ -1005,10 +1005,13 @@ async def cmd_coinbet(user, message, client=CLIENT):
         return
     
     rigged_coin = ["heads"] * 3 + ["tails"] * 3 + ["side"]
-    if pcall.lower() != "heads" and pcall.lower() != "tails":
+    if pcall.lower() not in rigged_coin:
         await CLIENT.send_message(message.channel, 'heads or tails only, dirtbag')
         return
-    await CLIENT.send_message(message.channel, "<@{0}> you called {1}. I'm flipping the coin...".format(user, pcall.lower()))
+    if pcall == "side":
+        await CLIENT.send_message(message.channel, "<@{0}> you called {1}...? ok well, I'm flipping the coin...".format(user, pcall.lower()))
+    else:
+        await CLIENT.send_message(message.channel, "<@{0}> you called {1}. I'm flipping the coin...".format(user, pcall.lower()))
     await CLIENT.send_typing(message.channel)
     await asyncio.sleep(1.25)
     result = random.choice(rigged_coin)
@@ -1016,17 +1019,24 @@ async def cmd_coinbet(user, message, client=CLIENT):
     payout = 0
     winner = (pcall.lower() == result)
     if winner:
-        payout = pbet
-        outstring = "you called it!! you won ${0}! enjoy your fat stack ".format('%.2f'%pbet)
+        if result == "side":
+            payout = pbet * len(rigged_coin)
+            outstring = "you called it!! you won ${0}! big time gambler bonus!".format('%.2f'%pbet)
+        else:
+            payout = pbet
+            outstring = "you called it!! you won ${0}! enjoy your fat stack ".format('%.2f'%pbet)
     else:
         payout = pbet * -1
-        outstring = "you beefed it!!"
+        if result == "side":
+            outstring = "wow, guess I win!"
+        else:
+            outstring = "you beefed it!!"
     adjustbux(user, payout)
 
     if result != "side":
         await CLIENT.send_message(message.channel, "<@{0}> it was {1}... {2}".format(user,result,outstring))
     else:
-        await CLIENT.send_message(message.channel, "<@{0}> it landed on its side?! wow, guess I win!".format(user))
+        await CLIENT.send_message(message.channel, "<@{0}> it landed on its side?!... {1}".format(user, outstring))
     
         
 COMMANDS = {"register": cmd_register,
@@ -1084,7 +1094,7 @@ async def on_message(message):
                 await DEBUG_COMMANDS[command](user, message, client=CLIENT)
             else:
                 await CLIENT.send_message(message.channel, "<@{0}> that's a debug command, you rascal!".format(user))
-    elif message.channel.is_private:
+    else:
         bottalk_request = await bottalk.get_request(CLIENT, message)
         if bottalk_request:
             try:
