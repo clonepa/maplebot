@@ -1004,7 +1004,7 @@ async def cmd_coinbet(user, message, client=CLIENT):
         await CLIENT.send_message(message.channel, "you don't have that kind of cash!")
         return
     
-    rigged_coin = ["heads"] * 3 + ["tails"] * 3 + ["side"]
+    rigged_coin = ["heads"] * 5 + ["tails"] * 5 + ["side"]
     if pcall.lower() not in rigged_coin:
         await CLIENT.send_message(message.channel, 'heads or tails only, dirtbag')
         return
