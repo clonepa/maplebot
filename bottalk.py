@@ -9,12 +9,10 @@ SYNTAX_REGEX = re.compile(r'^<@(\d+)> bot_talk_(req|res|err)#([0-9a-f]{30})#(.*)
 
 
 async def get_request(client, message):
-    print('checking request for ' + message.content)
     if message.channel.id != BOTTALK_CHANNELID:
         return
 
     parsed_message = SYNTAX_REGEX.match(message.content)
-    print(parsed_message)
     if (not parsed_message) or parsed_message.group(2) != 'req':
         return None
     snowflake = parsed_message.group(3)
