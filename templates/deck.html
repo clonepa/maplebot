@@ -48,24 +48,97 @@
 			var addbtn = document.getElementById('add');
 
 		    var table = $('#collection').DataTable( {
+		    	searching: true,
+		    	dom: 'Bf1rtip',
+		        buttons: [
+        			{ text: "Add to Deck", action: function ( e, dt, node, config ) {
+        				var daRows = table.rows( {selected: true} );
+        				var items = daRows.data();
+        				//deep copy that fukken data fuck you
+        				for (var i = items.length - 1; i >= 0; i--) {
+        					if (items[i][0] > 0){
+        						var clonedItem = Object.assign({}, items[i])
+        						var foundit = false;
+        						for (var c = deckData.length - 1; c >= 0; c--) {
+        							if (clonedItem[6] == deckData[c][6]){ 
+        								foundit = true;
+        								if (deckData[c][0] < clonedItem[0]){
+        									deckData[c][0] += 1
+        									
+        								}
+        							}
+
+        						}
+        						if (!foundit){
+        							clonedItem[0] = 1;
+        							deckData.push(clonedItem);
+        						}
+        						//items[i][0] = items[i][0] - 1;
+        					}
+        				}
+
+        				//work around for now
+        				//$('#collection').dataTable().fnClearTable();
+						//$('#collection').dataTable().fnAddData(dataSet2);
+						$('#decklist').dataTable().fnClearTable();
+						$('#decklist').dataTable().fnAddData(deckData);
+												
+
+        			}},
+        			{ text: "Donate to Maple (thank u)", action: function ( e, dt, node, config ) {return}}
+    			],
 		        data: dataSet2,
 		        select: true,
 		        columns: [
-		            { title: "Amount" },
+		            { title: "#" },
 		            { title: "Name" },
 		            { title: "Set" },
 		            { title: "Type" },
 		            { title: "Rarity" },
 		            { title: "Color"},
 		            { title: "MVerse ID"}],
-
-		         "columnDefs": [
-            	{
-                "targets": [ 6 ],
-                "visible": false  
-            	}]
+		        rowId: "MVerse ID",
+		        "columnDefs": [
+            		{
+                	"targets": [ 6 ],
+                	"visible": false  
+            		}]
 		    } );
 		    var table2 = $('#decklist').DataTable( {
+		    	searching: true,
+		    	dom: 'Bflrtip',
+		        buttons: [
+        			{ text: "Remove (single)", action: function ( e, dt, node, config ) {
+        				var daRows = table2.rows( {selected: true} );
+        				var items = daRows.data();
+        				for (var i = items.length - 1; i >= 0; i--) {
+        					items[i][0] = items[i][0] - 1;
+        					if (items[i][0] < 1){
+        						index = deckData.indexOf(items[i][6]);
+        						deckData.splice(index, 1);
+        					}
+        				}
+        				$('#collection').dataTable().fnClearTable();
+						$('#collection').dataTable().fnAddData(dataSet2);
+						$('#decklist').dataTable().fnClearTable();
+						if (deckData.length > 0)
+							$('#decklist').dataTable().fnAddData(deckData);
+        			}},
+        			{ text: "Remove (all)", action: function ( e, dt, node, config ) {
+        				var daRows = table2.rows( {selected: true} );
+        				var items = daRows.data();
+        				for (var i = items.length - 1; i >= 0; i--) {
+        					index = deckData.indexOf(items[i][6]);
+        					deckData.splice(index, 1);       				
+        				}
+        				$('#collection').dataTable().fnClearTable();
+						$('#collection').dataTable().fnAddData(dataSet2);
+						$('#decklist').dataTable().fnClearTable();
+						if (deckData.length > 0)
+							$('#decklist').dataTable().fnAddData(deckData);
+        			}},
+        			{ text: "Export", action: function ( e, dt, node, config ) {return}}
+    			],
 		        data: deckData,
 		        select: true,
 		        columns: [
@@ -98,38 +171,13 @@
         			$("#img-card").attr("src","https://api.scryfall.com/cards/named?fuzzy=!" + encodeURIComponent(data[1]) + "!&format=image&version=normal");
     		} );
 
-    		addbtn.addEventListener('click',function(event){
+    		/*addbtn.addEventListener('click',function(event){
 				var items = table.rows( {selected: true} ).data();
-				for (var i = items.length - 1; i >= 0; i--) {
-					console.log(items[i]);
-					for (var o = dataSet2.length - 1; o >= 0; o--) {
-						if (items[i][6] == dataSet2[o][6]){
-							var foundit = false;
-							for (var n = deckData.length - 1; n >= 0; n--) {
-								if (items[i][6] == deckData[n][6]){
-									foundit = true;
-									if(deckData[i][0] < items[i][0] ){
-										deckData[n][0] += 1;	
-									
-									}
-										
-								} 
-							}
-							if (!foundit){	
-								deckData.push(Object.assign({}, items[i]));
-								deckData[deckData.length - 1][0] = 1;
-							}
-						}
-					}
-				}
-				table.rows( {selected: true} ).select();
-				$('#decklist').dataTable().fnClearTable();
-				$('#decklist').dataTable().fnAddData(deckData);
-				$('#collection').dataTable().fnClearTable();
-				$('#collection').dataTable().fnAddData(dataSet2);
-			});
+				});*/
+		    
 		    {% endif %}
-		} );
+			
+    	});
 	</script>
 </head>
 <body>
@@ -142,7 +190,6 @@
 		</div>
 		<div class="row">
 			<div class="col-md-8">
-				<button id="add">Add selected to Deck</button>
 				<table id="collection" class="display"></table>
 			</div>
 			<div class="col-md-4">
@@ -152,8 +199,6 @@
 		<div class="row" style="margin-top: 25px;">
 			<div class="col-md-12">
 				<h3>Decklist:</h3>
-				<button id="remove">Remove selected from Deck</button>
-				<button id="export">Export Deck</button>
 				<table id="decklist" class="display"></table>
 			</div>
 		</div>
