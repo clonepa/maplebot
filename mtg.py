@@ -49,11 +49,11 @@ async def cmd_cardinfo(user, message, client=None):
                     'Set: {card_set}',
                     printings_string,
                     gatherer_string,
-                    '{card_image}']
+                    card['card_faces'][0]['image_uris']['large'] if 'card_faces' in card
+                    else card['image_uris']['large']]
     reply_string = '\n'.join(reply_string).format(user=user,
                                                   card_name=card['name'],
-                                                  card_set=card['set'].upper(),
-                                                  card_image=card['image_uris']['large'])
+                                                  card_set=card['set'].upper())
     await client.send_message(message.channel, reply_string)
 
 
