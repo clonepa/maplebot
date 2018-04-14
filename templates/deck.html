@@ -15,10 +15,10 @@
 	<link rel="stylesheet" href="https://cdn.datatables.net/buttons/1.5.1/css/buttons.dataTables.min.css">
 	<link rel="stylesheet" href="//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
 	<style>
-	@media (min-width: 1200px) {
+	@media (min-width: 1280px) {
     .container{
-        max-width: 1280px;
-        width: 1280px;
+        max-width: 1500px;
+        width: 1440px;
 	    }
 	}
 	</style>
@@ -41,14 +41,20 @@
     			}    
          	}
          	if (!foundit) {
-         		dataSet2.push([ {{ card.amount }}, "{{ card.name }}", ["{{ card.set }}"], "{{ card.type }}", "{{ card.rarity }}", "{{ card.color }}", {{ card.multiverseid }} ])
+         		dataSet2.push([ {{ card.amount }}, "{{ card.name }}", ["{{ card.set }}"], "{{ card.type }}", "{{ card.rarity }}", "{{ card.color }}", {{ card.multiverseid }}, {{ card.cmc }},"{{ card.date }}" ])
          	}
          {% endfor %}
 
     	
 		$(document).ready(function() {
 			
-
+			var updatedeckheader = function(){
+				var total = 0
+				for (var i = deckData.length - 1; i >= 0; i--) {
+					total += deckData[i][0]
+				}
+				$('#deckheader').html("Decklist (" + total + " cards)"  );
+			};
 		    var table = $('#collection').DataTable( {
 		    	searching: true,
 		    	dom: 'Bf1rtip',
@@ -84,7 +90,7 @@
 						//$('#collection').dataTable().fnAddData(dataSet2);
 						$('#decklist').dataTable().fnClearTable();
 						$('#decklist').dataTable().fnAddData(deckData);
-												
+						updatedeckheader();						
 
         			}},
         			{ text: "Donate to Maple (thank u)", action: function ( e, dt, node, config ) {return}}
@@ -98,7 +104,9 @@
 		            { title: "Type" },
 		            { title: "Rarity" },
 		            { title: "Color"},
-		            { title: "MVerse ID"}],
+		            { title: "MVerse ID"},
+		            { title: "CMC"},
+		            { title: "Last Obtained", "bSearchable": false}],
 		        rowId: "MVerse ID",
 		        "columnDefs": [
             		{
@@ -125,6 +133,7 @@
 						$('#decklist').dataTable().fnClearTable();
 						if (deckData.length > 0)
 							$('#decklist').dataTable().fnAddData(deckData);
+						updatedeckheader();	
         			}},
         			{ text: "Remove (all)", action: function ( e, dt, node, config ) {
         				var daRows = table2.rows( {selected: true} );
@@ -138,6 +147,7 @@
 						$('#decklist').dataTable().fnClearTable();
 						if (deckData.length > 0)
 							$('#decklist').dataTable().fnAddData(deckData);
+						updatedeckheader();	
         			}},
         			{ text: "Export", action: function ( e, dt, node, config ) {
         				var outstring = ""
@@ -151,13 +161,15 @@
 		        data: deckData,
 		        select: true,
 		        columns: [
-		            { title: "Amount" },
+		            { title: "#" },
 		            { title: "Name" },
 		            { title: "Set" },
 		            { title: "Type" },
 		            { title: "Rarity" },
 		            { title: "Color"},
-		            { title: "MVerse ID"}],
+		            { title: "MVerse ID"},
+		            { title: "CMC"},
+		            { title: "Last Obtained", "bSearchable": false}],
 
 		         "columnDefs": [
             	{
@@ -208,7 +220,7 @@
 		</div>
 		<div class="row" style="margin-top: 25px;">
 			<div class="col-md-12">
-				<h3>Decklist:</h3>
+				<h3 id="deckheader">Decklist (0 cards)</h3>
 				<table id="decklist" class="display"></table>
 			</div>
 		</div>
