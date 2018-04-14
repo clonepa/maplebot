@@ -435,10 +435,10 @@ def export_collection_to_list(user):
     who = get_user_record(user)
     conn = sqlite3.connect('maple.db')
     cursor = conn.cursor()
-    cursor.execute("SELECT amount_owned, card_name, card_set, card_type, rarity, cards.multiverse_id, cards.colors, cards.cmc FROM collection INNER JOIN cards ON collection.multiverse_id = cards.multiverse_id WHERE owner_id = :ownerid", {"ownerid": who[0]})
+    cursor.execute("SELECT amount_owned, card_name, card_set, card_type, rarity, cards.multiverse_id, cards.colors, cards.cmc, collection.date_obtained FROM collection INNER JOIN cards ON collection.multiverse_id = cards.multiverse_id WHERE owner_id = :ownerid", {"ownerid": who[0]})
     out = []
     for card in cursor.fetchall():
-        out.append( {"amount": card[0], "name": card[1], "set": card[2], "type": card[3], "rarity": card[4], "multiverseid": card[5], "color": card[6], "cmc": card[7]} )
+        out.append( {"amount": card[0], "name": card[1], "set": card[2], "type": card[3], "rarity": card[4], "multiverseid": card[5], "color": card[6], "cmc": card[7], "date": card[8]} )
     conn.close()
     return out    
 
@@ -837,8 +837,7 @@ async def cmd_query(user, message, client=CLIENT):
     conn = sqlite3.connect('maple.db')
     cursor = conn.cursor()
     if ('DROP' in query.upper() and user != '234042140248899587'):
-        await CLIENT.send_message(message.channel, "pwease no droppy u_u")
-        return
+        await CLIENT.send_message(message.channel, "pwease be careful wif dwoppy u_u")
     outstring = ""
     try:
         cursor.execute(query)
@@ -922,7 +921,7 @@ async def cmd_setupdb(user, message, client=CLIENT):
     cursor.execute('''CREATE TRIGGER IF NOT EXISTS update_date_obtained 
                 AFTER UPDATE OF amount_owned ON collection 
                 WHEN new.amount_owned > old.amount_owned BEGIN 
-                UPDATE collection SET date_obtained = CURRENT_TIMESTAMP; 
+                UPDATE collection SET date_obtained = CURRENT_TIMESTAMP WHERE rowid = new.rowid; 
                 END''')
 
     conn.commit()
@@ -1044,7 +1043,9 @@ async def cmd_coinbet(user, message, client=CLIENT):
         await CLIENT.send_message(message.channel, "<@{0}> it was {1}... {2}".format(user,result,outstring))
     else:
         await CLIENT.send_message(message.channel, "<@{0}> it landed on its side?!... {1}".format(user, outstring))
-    
+
+async def cmd_blackjack(user, message, client=CLIENT):
+    await CLIENT.send_message(message.channel, "```\n\nholy shit piss\n\n```")
         
 COMMANDS = {"register": cmd_register,
             "givecard": cmd_givecard,
@@ -1062,8 +1063,8 @@ COMMANDS = {"register": cmd_register,
             "hash": cmd_hash,
             "changenick": cmd_changenick,
             "userinfo": cmd_userinfo,
-            "mapletest": cmd_mapletest,
-            "coinbet": cmd_coinbet}
+            "mapletest": cmd_mapletest}
+            #"coinbet": cmd_coinbet}
 
 DEBUG_COMMANDS = {"query": cmd_query,
                   "gutdump": cmd_gutdump,
@@ -1072,7 +1073,8 @@ DEBUG_COMMANDS = {"query": cmd_query,
                   "populatecardinfo": cmd_populatecardinfo,
                   "givebooster": cmd_givebooster,
                   "adjustbux": cmd_adjustbux,
-                  "loadsetjson": cmd_loadsetjson}
+                  "loadsetjson": cmd_loadsetjson,
+                  "blackjack": cmd_blackjack}
 
 
 @CLIENT.event
