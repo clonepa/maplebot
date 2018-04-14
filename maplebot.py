@@ -261,7 +261,7 @@ def give_homie_some_lands(who):
     user_record = get_user_record(who)
     mvid = [439857, 439859, 439856, 439858, 439860]
     for i in mvid:
-        cursor.execute("INSERT OR IGNORE INTO collection VALUES (:name,:mvid,60)",
+        cursor.execute("INSERT OR IGNORE INTO collection VALUES (:name,:mvid,60,CURRENT_TIMESTAMP)",
                        {"name": user_record[0], "mvid": i})
     conn.commit()
     conn.close()
@@ -333,7 +333,7 @@ def open_booster(owner, card_set, amount):
                       {"name": owner, "mvid": card[0] })
             cr = cursor.fetchone()
             if not cr:
-                cursor.execute("INSERT INTO collection VALUES (:name,:mvid,1)", {"name": owner, "mvid": card[0]})
+                cursor.execute("INSERT INTO collection VALUES (:name,:mvid,1,CURRENT_TIMESTAMP)", {"name": owner, "mvid": card[0]})
             else:
                 cursor.execute("UPDATE collection SET amount_owned = amount_owned + 1 WHERE owner_id=:name AND multiverse_id=:mvid", 
                          {"name": owner, "mvid": card[0]})
@@ -528,7 +528,7 @@ def give_card(user, target, card, amount):
                       {"new_amount": (target_amountowned + iter_amount), "rowid": target_rowid})
         # otherwise, create new row with that amount
         else:
-            cursor.execute("INSERT INTO collection VALUES (:target_id, :multiverse_id, :amount)",
+            cursor.execute("INSERT INTO collection VALUES (:target_id, :multiverse_id, :amount, CURRENT_TIMESTAMP)",
                            {"target_id": target_id, "multiverse_id": multiverse_id, "amount": iter_amount})
         # remove amount owned from user
         cursor.execute("UPDATE collection SET amount_owned = :new_amount WHERE rowid = :rowid",
@@ -901,7 +901,7 @@ async def cmd_setupdb(user, message, client=CLIENT):
                  (multiverse_id INTEGER PRIMARY KEY, card_name TEXT, card_set TEXT, card_type TEXT, rarity TEXT, colors TEXT, cmc TEXT)''')
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS collection
-                 (owner_id TEXT, multiverse_id INTEGER, amount_owned INTEGER,
+                 (owner_id TEXT, multiverse_id INTEGER, amount_owned INTEGER, date_obtained TIMESTAMP,
                  FOREIGN KEY(owner_id) REFERENCES users(discord_id), FOREIGN KEY(multiverse_id) REFERENCES cards(multiverse_id),
                  PRIMARY KEY (owner_id, multiverse_id))''')
 
@@ -918,6 +918,13 @@ async def cmd_setupdb(user, message, client=CLIENT):
                 AFTER UPDATE OF amount_owned ON collection BEGIN 
                 DELETE FROM collection WHERE amount_owned < 1; 
                 END''')
+
+    cursor.execute('''CREATE TRIGGER IF NOT EXISTS update_date_obtained 
+                AFTER UPDATE OF amount_owned ON collection 
+                WHEN new.amount_owned > old.amount_owned BEGIN 
+                UPDATE collection SET date_obtained = CURRENT_TIMESTAMP; 
+                END''')
+
     conn.commit()
     conn.close()
 
