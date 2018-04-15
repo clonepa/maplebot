@@ -579,7 +579,7 @@ async def cmd_register(user, message, client=CLIENT):
 async def cmd_givecard(user, message, client=CLIENT):
     #format: !givecard clonepa Swamp 2
     target, card = message.content.split(maxsplit=2)[1:] # = target = 'clonepa', card= 'Swamp 2'
-    amount_re = re.search(r'\seed+(\d+)$', card)
+    amount_re = re.search(r'\s+(\d+)$', card)
     if amount_re:
         amount = int(amount_re[1])
         card = card[:-len(amount_re[0])]
