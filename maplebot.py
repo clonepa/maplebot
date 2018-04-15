@@ -43,7 +43,7 @@ except FileNotFoundError:
     RARITY_CACHE = collections.defaultdict(str)
 
 
-maplebot = commands.Bot(command_prefix='?', description='maple the magic cat', help_attrs={"name": "maplehelp"})
+maplebot = commands.Bot(command_prefix='!', description='maple the magic cat', help_attrs={"name": "maplehelp"})
 
 
 # ---- check decorators for commands ---- #
