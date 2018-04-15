@@ -633,7 +633,7 @@ async def register(context, nickname: str):
     user = context.message.author.id
     conn = sqlite3.connect('maple.db')
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM users WHERE discord_id=' + user)
+    cursor.execute('SELECT * FROM users WHERE discord_id=?', (user))
     if cursor.fetchall():
         await maplebot.reply("user with discord ID {0} already exists. don't try to pull a fast one on old maple!!"
                              .format(user))
@@ -641,7 +641,7 @@ async def register(context, nickname: str):
         await maplebot.reply("user with nickname {0} already exists. don't try to confuse old maple you hear!!"
                              .format(nickname))
     else:
-        cursor.execute("INSERT INTO users VALUES ('" + user + "','" + nickname + "',1500,50.00)")
+        cursor.execute("INSERT INTO users VALUES (?,?,1500,50.00)", (user, nickname))
         conn.commit()
         conn.close()
         give_homie_some_lands(user)
@@ -878,7 +878,7 @@ async def recordmatch(context, winner, loser):
 async def hash(context):
     thing_to_hash = context.message.content[len(context.message.content.split()[0]):]
     hashed_thing = deckhash.make_deck_hash(*deckhash.convert_deck_to_boards(thing_to_hash))
-    await maplebot.reply('hashed deck: ' + hashed_thing)
+    await maplebot.reply('hashed deck: {0}'.format(hashed_thing))
 
 
 @maplebot.command(pass_context=True)
@@ -925,15 +925,15 @@ async def query(context):
         cursor.execute(query)
         for i in cursor.fetchall():
             if len(outstring) > 1500:
-                await maplebot.say("```" + outstring + "\n```")
+                await maplebot.say("```{0}\n```".format(outstring))
                 outstring = ""
             outstring += str(i) + "\n"
     except sqlite3.OperationalError:
-        outstring = "sqlite operational error homie...\n" + str(sys.exc_info()[1])
+        outstring = "sqlite operational error homie...\n{0}".format(sys.exc_info()[1])
 
     if outstring == "":
-        outstring = "No output so it probably worked"
-    await maplebot.say("```" + outstring + "```")
+        outstring = "rows affected : {0}".format(cursor.rowcount)
+    await maplebot.say("```{0}```".format(outstring))
     conn.commit()
     conn.close()
 
@@ -945,7 +945,7 @@ async def gutdump(context, table: str = "users"):
         with open(__file__) as file:
             out = file.read(1024)
             while out:
-                await maplebot.say("```" + out.replace("```", "[codeblock]") + "```")
+                await maplebot.say("```{0}```".format(out.replace("```", "[codeblock]")))
                 out = file.read(1024)
                 await asyncio.sleep(0.25)
         return
@@ -956,11 +956,11 @@ async def gutdump(context, table: str = "users"):
     names = [description[0] for description in cursor.description]
     for i in cursor.fetchall():
         if len(outstring) > 1500:
-            await maplebot.say("```" + str(names) + "\n\n" + outstring + "\n```")
+            await maplebot.say("```{0}\n\n{1}\n```".format(names, outstring))
             outstring = ""
         outstring += str(i) + "\n"
     if outstring:
-        await maplebot.say("```" + str(names) + "\n\n" + outstring + "\n```")
+        await maplebot.say("```{0}\n\n{1}\n```".format(names, outstring))
     conn.close()
 
 
