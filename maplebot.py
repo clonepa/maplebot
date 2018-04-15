@@ -43,7 +43,7 @@ except FileNotFoundError:
     RARITY_CACHE = collections.defaultdict(str)
 
 
-maplebot = commands.Bot(command_prefix='!', description='maple')
+maplebot = commands.Bot(command_prefix='!', description='maple the magic cat', help_attrs={"name": "maplehelp"})
 
 
 # ---- check decorators for commands ---- #
@@ -52,7 +52,7 @@ maplebot = commands.Bot(command_prefix='!', description='maple')
 def debug_command():
     def predicate(context):
         is_debugger = context.message.author.id in DEBUG_WHITELIST
-        if not is_debugger:
+        if not is_debugger and context.command.name != "maplehelp":
             asyncio.ensure_future(maplebot.reply("that's a debug command, you rascal!"))
         return is_debugger
     return commands.check(predicate)
@@ -61,7 +61,7 @@ def debug_command():
 def requires_registration():
     def predicate(context):
         registered = is_registered(context.message.author.id)
-        if not registered:
+        if not registered and context.command.name != "maplehelp":
             asyncio.ensure_future(maplebot.reply("you ain't registered!!!"))
         return registered
     return commands.check(predicate)
