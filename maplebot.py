@@ -625,6 +625,61 @@ def make_ptpb(text):
     return next(i.split()[1] for i in response.text.split('\n') if i.startswith('url:'))
 
 
+def split_every_n(tosplit, n: int, preserve_newline=False):
+    if preserve_newline:
+        out_list = []
+        out_string = ''
+        for line in tosplit.splitlines(True):
+            if len(out_string + line) < n:
+                out_string += line
+            else:
+                out_list.append(out_string)
+                out_string = line
+        out_list.append(out_string)
+        return out_list
+    else:
+        return [tosplit[i:i + n] for i in range(0, len(tosplit), n)]
+
+
+def codeblock(string):
+    return '```{0}```'.format(string)
+
+
+# -------------------          ------------------- #
+
+
+async def big_output_confirmation(context, output: str, max_len=1500, formatting=str):
+    '''checks if some output is longer than max_len(default: 1500). if so, asks user for confirmation on sending,
+        if confirmed, says output with formatting given by optional function parameter 'formatting' '''
+    def check(message):
+        msg = message.content.lower()
+        return (msg.startswith('y') or msg.startswith('n'))
+
+    output_length = len(output)
+    if output_length > max_len:
+        await maplebot.reply("do you really want me to send all this? it's {0} characters long... [y/n]".format(output_length))
+        reply = await maplebot.wait_for_message(channel=context.message.channel,
+                                                author=context.message.author,
+                                                check=check,
+                                                timeout=60)
+        if not reply:
+            return None
+        reply_content = reply.content.lower()
+        confirm = True if reply_content.startswith('y') else False
+        if confirm:
+            processed = split_every_n(output, max_len, True)
+        else:
+            await maplebot.reply("ok!")
+            return False
+    else:
+        processed = [output]
+
+    for split in processed:
+        await maplebot.say(formatting(split))
+        asyncio.sleep(0.05)
+    return True
+
+
 # ------------------- COMMANDS ------------------- #
 
 
@@ -923,45 +978,31 @@ async def query(context):
     outstring = ""
     try:
         cursor.execute(query)
-        for i in cursor.fetchall():
-            if len(outstring) > 1500:
-                await maplebot.say("```{0}\n```".format(outstring))
-                outstring = ""
-            outstring += str(i) + "\n"
+        outstring = '\n'.join(str(x) for x in cursor.fetchall())
     except sqlite3.OperationalError:
         outstring = "sqlite operational error homie...\n{0}".format(sys.exc_info()[1])
 
     if outstring == "":
         outstring = "rows affected : {0}".format(cursor.rowcount)
-    await maplebot.say("```{0}```".format(outstring))
+    await big_output_confirmation(context, outstring, formatting=codeblock)
     conn.commit()
     conn.close()
 
 
 @maplebot.command(pass_context=True)
 @debug_command()
-async def gutdump(context, table: str = "users"):
+async def gutdump(context, table: str = "users", limit: int = 0):
     if table == "maple":
         with open(__file__) as file:
-            out = file.read(1024)
-            while out:
-                await maplebot.say("```{0}```".format(out.replace("```", "[codeblock]")))
-                out = file.read(1024)
-                await asyncio.sleep(0.25)
-        return
-    conn = sqlite3.connect('maple.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM " + table)
-    outstring = ""
-    names = [description[0] for description in cursor.description]
-    for i in cursor.fetchall():
-        if len(outstring) > 1500:
-            await maplebot.say("```{0}\n\n{1}\n```".format(names, outstring))
-            outstring = ""
-        outstring += str(i) + "\n"
-    if outstring:
-        await maplebot.say("```{0}\n\n{1}\n```".format(names, outstring))
-    conn.close()
+            output = file.read()
+    else:
+        conn = sqlite3.connect('maple.db')
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM {0} {1}".format(table, 'LIMIT {0}'.format(limit) if limit else ''))
+        output = "{names}\n\n{output}".format(names=[description[0] for description in cursor.description],
+                                              output='\n'.join(str(x) for x in cursor.fetchall()))
+        conn.close()
+    await big_output_confirmation(context, output, formatting=codeblock)
 
 
 @maplebot.command()
