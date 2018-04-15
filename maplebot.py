@@ -154,7 +154,7 @@ def verify_nick(nick):
     '''returns True if nick doesn't exist in db, False if it does'''
     conn = sqlite3.connect('maple.db')
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE name LIKE :name",
+    cursor.execute("SELECT * FROM users WHERE name = :name COLLATE NOCASE",
                    {"name": nick})
     result = cursor.fetchone()
     conn.close()
@@ -321,20 +321,12 @@ def give_booster(owner, card_set, amount=1):
     cardobj = load_mtgjson()
     cursor.execute("SELECT card_set FROM cards WHERE card_set LIKE :cardset", {"cardset": card_set})
     if not (card_set in cardobj):
-        outmessage = "I don't know where to find that kind of booster..."
-        return outmessage
-    elif not cursor.fetchone():
-        outmessage = "that set's not in my brain!!"
-        return outmessage
-    elif not ('booster' in cardobj[card_set]):
-        outmessage = "I've heard of that set but I've never seen a booster for it, I'll see what I can do..."
-    cursor.execute("SELECT discord_id FROM users WHERE name LIKE :name OR discord_id LIKE :name",
-                   {"name": owner})
-    u = cursor.fetchone()[0]
+        raise KeyError
+    owner_id = get_user_record(owner, 'discord_id')
     for i in range(amount):
         random.seed()
         booster_seed = random.getrandbits(32)
-        cursor.execute("INSERT INTO booster_inventory VALUES (:owner, :cset, :seed)", {"owner": u, "cset": card_set, "seed": booster_seed})
+        cursor.execute("INSERT INTO booster_inventory VALUES (:owner, :cset, :seed)", {"owner": owner_id, "cset": card_set, "seed": booster_seed})
     conn.commit()
     conn.close()
     if outmessage == "":
@@ -520,18 +512,19 @@ def is_registered(discord_id):
 def get_user_record(who, field=None):
     conn = sqlite3.connect('maple.db')
     cursor = conn.cursor()
-    fields = field if field else "*"
-    cursor.execute("SELECT {0} FROM users WHERE discord_id='{1}' OR name='{1}'".format(fields, who))
+    cursor.execute("SELECT * FROM users WHERE discord_id=:who OR name=:who COLLATE NOCASE",
+                   {"who": who})
     columns = [description[0] for description in cursor.description]
     r = cursor.fetchone()
     conn.close()
-    if field:
-        return r[0]
-    else:
-        out_dict = collections.OrderedDict.fromkeys(columns)
-        for i, key in enumerate(out_dict):
-            out_dict[key] = r[i]
-        return dict(out_dict)
+    if not r:
+        return None
+
+    out_dict = collections.OrderedDict.fromkeys(columns)
+    for i, key in enumerate(out_dict):
+        out_dict[key] = r[i]
+
+    return out_dict[field] if field else out_dict
 
 
 def update_elo(who, elo):
@@ -640,7 +633,7 @@ async def register(context, nickname: str):
     user = context.message.author.id
     conn = sqlite3.connect('maple.db')
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM users WHERE discord_id=' + user)
+    cursor.execute('SELECT * FROM users WHERE discord_id=?', (user))
     if cursor.fetchall():
         await maplebot.reply("user with discord ID {0} already exists. don't try to pull a fast one on old maple!!"
                              .format(user))
@@ -648,7 +641,7 @@ async def register(context, nickname: str):
         await maplebot.reply("user with nickname {0} already exists. don't try to confuse old maple you hear!!"
                              .format(nickname))
     else:
-        cursor.execute("INSERT INTO users VALUES ('" + user + "','" + nickname + "',1500,50.00)")
+        cursor.execute("INSERT INTO users VALUES (?,?,1500,50.00)", (user, nickname))
         conn.commit()
         conn.close()
         give_homie_some_lands(user)
@@ -885,7 +878,7 @@ async def recordmatch(context, winner, loser):
 async def hash(context):
     thing_to_hash = context.message.content[len(context.message.content.split()[0]):]
     hashed_thing = deckhash.make_deck_hash(*deckhash.convert_deck_to_boards(thing_to_hash))
-    await maplebot.reply('hashed deck: ' + hashed_thing)
+    await maplebot.reply('hashed deck: {0}'.format(hashed_thing))
 
 
 @maplebot.command(pass_context=True)
@@ -932,15 +925,15 @@ async def query(context):
         cursor.execute(query)
         for i in cursor.fetchall():
             if len(outstring) > 1500:
-                await maplebot.say("```" + outstring + "\n```")
+                await maplebot.say("```{0}\n```".format(outstring))
                 outstring = ""
             outstring += str(i) + "\n"
     except sqlite3.OperationalError:
-        outstring = "sqlite operational error homie...\n" + str(sys.exc_info()[1])
+        outstring = "sqlite operational error homie...\n{0}".format(sys.exc_info()[1])
 
     if outstring == "":
-        outstring = "No output so it probably worked"
-    await maplebot.say("```" + outstring + "```")
+        outstring = "rows affected : {0}".format(cursor.rowcount)
+    await maplebot.say("```{0}```".format(outstring))
     conn.commit()
     conn.close()
 
@@ -952,7 +945,7 @@ async def gutdump(context, table: str = "users"):
         with open(__file__) as file:
             out = file.read(1024)
             while out:
-                await maplebot.say("```" + out.replace("```", "[codeblock]") + "```")
+                await maplebot.say("```{0}```".format(out.replace("```", "[codeblock]")))
                 out = file.read(1024)
                 await asyncio.sleep(0.25)
         return
@@ -963,11 +956,11 @@ async def gutdump(context, table: str = "users"):
     names = [description[0] for description in cursor.description]
     for i in cursor.fetchall():
         if len(outstring) > 1500:
-            await maplebot.say("```" + str(names) + "\n\n" + outstring + "\n```")
+            await maplebot.say("```{0}\n\n{1}\n```".format(names, outstring))
             outstring = ""
         outstring += str(i) + "\n"
     if outstring:
-        await maplebot.say("```" + str(names) + "\n\n" + outstring + "\n```")
+        await maplebot.say("```{0}\n\n{1}\n```".format(names, outstring))
     conn.close()
 
 
@@ -1066,7 +1059,10 @@ async def givebooster(context, card_set, target=None, amount: str = 1):
     if not target:
         target = context.message.author.id
     print('give_booster', target, card_set, amount)
-    give_booster(target, card_set, amount)
+    try:
+        give_booster(target, card_set, amount)
+    except KeyError:
+        return await maplebot.reply("{0} is not a valid set!!".format(card_set))
     target_id = get_user_record(target, 'discord_id')
     await maplebot.reply("{0} {1} booster(s) added to <@{2}>'s inventory!"
                          .format(amount, card_set, target_id))
@@ -1164,12 +1160,13 @@ async def cardsearch(context):
 async def hascard(context, target, card):
     card = context.message.content.split(maxsplit=2)[2]
     cursor = sqlite3.connect('maple.db').cursor()
-
+    if not get_user_record(target):
+        return await maplebot.reply("user {0} doesn't exist!".format(target))
     cursor.execute('''SELECT cards.card_name, users.name, SUM(collection.amount_owned) FROM collection
                    INNER JOIN cards ON collection.multiverse_id = cards.multiverse_id
                    INNER JOIN users ON collection.owner_id      = users.discord_id
                    WHERE cards.card_name LIKE :card
-                   AND (users.name LIKE :target  OR  users.discord_id LIKE :target)
+                   AND (users.name = :target COLLATE NOCASE OR  users.discord_id = :target)
                    GROUP BY cards.card_name''',
                    {'card': card, 'target': target})
     result = cursor.fetchone()
