@@ -232,6 +232,7 @@ def cache_rarities(card_set):
 
     return cached_count
 
+
 def gen_booster(card_set, seeds):
     '''generates boosters for a card set from a list of seeds'''
     cardobj = load_mtgjson()
@@ -242,14 +243,14 @@ def gen_booster(card_set, seeds):
     rarity_dict = {
         "rarities": ["rare", "mythic rare", "uncommon", "common", "special", "land"],
         "other_shit": ["token", "marketing"]
-        }
+    }
 
     if card_set in cardobj:
         for seed in seeds:
 
             random.seed(seed['seed'])
             mybooster = []
-            if not 'booster' in cardobj[card_set]:
+            if 'booster' not in cardobj[card_set]:
                 booster = ["rare", "uncommon", "uncommon", "uncommon", "common", "common", "common",
                            "common", "common", "common", "common", "common", "common", "common"]
             else:
@@ -296,6 +297,7 @@ def gen_booster(card_set, seeds):
             outbooster += [{"rowid": seed['rowid'], "booster": generated_booster, "seed": seed['seed']}]
     cursor.connection.close()
     return outbooster
+
 
 def give_homie_some_lands(who):
     '''give 60 lands to new user'''
@@ -688,11 +690,12 @@ async def givecard(context):
     await maplebot.reply(reply_dict[result_dict['code']])
 
 
-# todo finish this
-# @maplebot.command(pass_context=True, aliases=['mtglinks'])
-# async def maplelinks(context):
-#     await maplebot.reply("Collection: http://qubeley.biz/mtg/collection/{0}\n".format(user)
-#     )
+@maplebot.command(pass_context=True, aliases=['mtglinks'])
+async def maplelinks(context):
+    username = get_user_record(context.message.author.id, 'name')
+    await maplebot.reply(("\nCollection: http://qubeley.biz/mtg/collection/{0}" +
+                          "\nDeckbuilder: http://qubeley.biz/mtg/deckbuilder/{0}"
+                          ).format(username))
 
 
 @maplebot.command(pass_context=True, aliases=['getcollection'])
@@ -1157,9 +1160,10 @@ async def cardsearch(context):
     await maplebot.reply(reply_string)
 
 
-async def hascard(user, message, client=None):
+@maplebot.command(pass_context=True)
+async def hascard(context, target, card):
+    card = context.message.content.split(maxsplit=2)[2]
     cursor = sqlite3.connect('maple.db').cursor()
-    target, card = message.content.split(maxsplit=2)[1:]  # !hascard ari swamp
 
     cursor.execute('''SELECT cards.card_name, users.name, SUM(collection.amount_owned) FROM collection
                    INNER JOIN cards ON collection.multiverse_id = cards.multiverse_id
@@ -1169,13 +1173,13 @@ async def hascard(user, message, client=None):
                    GROUP BY cards.card_name''',
                    {'card': card, 'target': target})
     result = cursor.fetchone()
+    cursor.connection.close()
     if not result:
-        await client.send_message(message.channel, '<@{0}> {1} has no card named "{2}"'.format(user, target, card))
+        await maplebot.reply('{1} has no card named "{2}"'.format(target, card))
         return
-    await client.send_message(message.channel, '<@{user}> {target} has {amount} of {card}'.format(user=user,
-                                                                                                  target=result[1],
-                                                                                                  amount=result[2],
-                                                                                                  card=result[0]))
+    await maplebot.reply('{target} has {amount} of {card}'.format(target=result[1],
+                                                                  amount=result[2],
+                                                                  card=result[0]))
 
 
 @maplebot.event
