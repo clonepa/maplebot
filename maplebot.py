@@ -776,7 +776,7 @@ async def checkdeck(context):
                                     .format(message.author.id, hashed_deck))
 
 
-@maplebot.command(pass_context=True, aliases=['boosterprice'])
+@maplebot.command(pass_context=True, aliases=['boosterprice', 'checkprice'])
 async def packprice(context, card_set: str):
     '''!packprice [setcode]
     returns mtgo booster pack price for the set via mtggoldfish'''
@@ -1201,7 +1201,8 @@ async def cardsearch(context):
 async def hascard(context, target, card):
     card = context.message.content.split(maxsplit=2)[2]
     cursor = sqlite3.connect('maple.db').cursor()
-    if not get_user_record(target):
+    target_record = get_user_record(target)
+    if not target_record:
         return await maplebot.reply("user {0} doesn't exist!".format(target))
     cursor.execute('''SELECT cards.card_name, users.name, SUM(collection.amount_owned) FROM collection
                    INNER JOIN cards ON collection.multiverse_id = cards.multiverse_id
@@ -1213,11 +1214,24 @@ async def hascard(context, target, card):
     result = cursor.fetchone()
     cursor.connection.close()
     if not result:
-        await maplebot.reply('{0} has no card named "{1}"'.format(target, card))
+        await maplebot.reply('{0} has no card named "{1}"'.format(target_record['name'], card))
         return
     await maplebot.reply('{target} has {amount} of {card}'.format(target=result[1],
                                                                   amount=result[2],
                                                                   card=result[0]))
+
+
+@maplebot.command(pass_context=True)
+async def setcode(context, set_name: str):
+    set_name = context.message.content.split(maxsplit=1)[1]
+    conn = sqlite3.connect('maple.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT name, code FROM set_map WHERE name = :set_name COLLATE NOCASE", {"set_name": set_name})
+    result = cursor.fetchone()
+    conn.close()
+    if not result:
+        return await maplebot.reply("set named *{0}* not found...".format(set_name))
+    return await maplebot.reply("code for set *{0[0]}* is **{0[1]}**".format(result))
 
 
 @maplebot.event
