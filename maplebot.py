@@ -1094,9 +1094,9 @@ async def populatecardinfo():
     await maplebot.say("i'm back!")
 
 
-@maplebot.command(pass_context=True)
+@maplebot.command(pass_context=True, aliases=["givepack"])
 @debug_command()
-async def givebooster(context, card_set, target=None, amount: str = 1):
+async def givebooster(context, card_set, target=None, amount: int = 1):
     card_set = card_set.upper()
     if not target:
         target = context.message.author.id
