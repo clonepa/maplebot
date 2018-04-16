@@ -46,7 +46,18 @@ except FileNotFoundError:
 maplebot = commands.Bot(command_prefix='!', description='maple the magic cat', help_attrs={"name": "maplehelp"})
 
 
-# ---- check decorators for commands ---- #
+# ---- decorators for commands ---- #
+
+def poopese(cmd):
+    oldaliases = [cmd.name] + cmd.aliases
+    newaliases = []
+    for alias in oldaliases:
+        newalias = alias.replace('n', 'm').replace('b', 'v')
+        if newalias != alias:
+            newaliases.append(newalias)
+    print(newaliases)
+    for newalias in newaliases:
+        maplebot.commands[newalias] = cmd
 
 
 def debug_command():
@@ -683,6 +694,7 @@ async def big_output_confirmation(context, output: str, max_len=1500, formatting
 # ------------------- COMMANDS ------------------- #
 
 
+@poopese
 @maplebot.command(pass_context=True, no_pm=True, aliases=['mapleregister'])
 async def register(context, nickname: str):
     user = context.message.author.id
@@ -707,6 +719,7 @@ async def register(context, nickname: str):
     return
 
 
+@poopese
 @maplebot.command(pass_context=True, no_pm=True, aliases=['sendcard'])
 @requires_registration()
 async def givecard(context):
@@ -738,6 +751,7 @@ async def givecard(context):
     await maplebot.reply(reply_dict[result_dict['code']])
 
 
+@poopese
 @maplebot.command(pass_context=True, aliases=['mtglinks'])
 async def maplelinks(context):
     username = get_user_record(context.message.author.id, 'name')
@@ -746,6 +760,7 @@ async def maplelinks(context):
                           ).format(username))
 
 
+@poopese
 @maplebot.command(pass_context=True, aliases=['getcollection'])
 @requires_registration()
 async def exportcollection(context):
@@ -757,6 +772,7 @@ async def exportcollection(context):
                          .format(pb_url))
 
 
+@poopese
 @maplebot.command(pass_context=True, aliases=['validatedeck', 'deckcheck'])
 @requires_registration()
 async def checkdeck(context):
@@ -776,6 +792,7 @@ async def checkdeck(context):
                                     .format(message.author.id, hashed_deck))
 
 
+@poopese
 @maplebot.command(pass_context=True, aliases=['boosterprice', 'checkprice'])
 async def packprice(context, card_set: str):
     '''!packprice [setcode]
@@ -792,6 +809,7 @@ async def packprice(context, card_set: str):
     await maplebot.reply(out)
 
 
+@poopese
 @maplebot.command(pass_context=True, aliases=['maplebux', 'maplebalance'])
 @requires_registration()
 async def checkbux(context):
@@ -799,6 +817,7 @@ async def checkbux(context):
                          .format('%.2f' % check_bux(context.message.author.id)))
 
 
+@poopese
 @maplebot.command(pass_context=True, aliases=['givemaplebux', 'sendbux'])
 @requires_registration()
 async def givebux(context, target: str, amount: float):
@@ -839,6 +858,7 @@ async def givebux(context, target: str, amount: float):
     conn.close()
 
 
+@poopese
 @maplebot.command(pass_context=True, aliases=['openpack', 'obooster', 'opack'])
 @requires_registration()
 async def openbooster(context, card_set: to_upper, amount: int = 1):
@@ -864,6 +884,7 @@ async def openbooster(context, card_set: to_upper, amount: int = 1):
                              .format(user))
 
 
+@poopese
 @maplebot.command(pass_context=True, aliases=['buypack'])
 @requires_registration()
 async def buybooster(context, card_set: to_upper, amount: int = 1):
@@ -904,6 +925,7 @@ async def buybooster(context, card_set: to_upper, amount: int = 1):
     IN_TRANSACTION.remove(user)
 
 
+@poopese
 @maplebot.command(pass_context=True)
 @requires_registration()
 async def recordmatch(context, winner, loser):
@@ -929,6 +951,7 @@ async def recordmatch(context, winner, loser):
                                  loser_bux_adjustment))
 
 
+@poopese
 @maplebot.command(pass_context=True)
 async def hash(context):
     thing_to_hash = context.message.content[len(context.message.content.split()[0]):]
@@ -936,6 +959,7 @@ async def hash(context):
     await maplebot.reply('hashed deck: {0}'.format(hashed_thing))
 
 
+@poopese
 @maplebot.command(pass_context=True)
 @requires_registration()
 async def changenick(context, nick):
@@ -952,6 +976,7 @@ async def changenick(context, nick):
         conn.close()
 
 
+@poopese
 @maplebot.command(pass_context=True)
 async def userinfo(context, user=None):
     user = user if user else context.message.author.id
@@ -967,6 +992,7 @@ async def userinfo(context, user=None):
 
 # ---- That Debug Shit ---- #
 
+@poopese
 @maplebot.command(pass_context=True)
 @debug_command()
 async def query(context):
@@ -989,6 +1015,7 @@ async def query(context):
     conn.close()
 
 
+@poopese
 @maplebot.command(pass_context=True)
 @debug_command()
 async def gutdump(context, table: str = "users", limit: int = 0):
@@ -1005,6 +1032,7 @@ async def gutdump(context, table: str = "users", limit: int = 0):
     await big_output_confirmation(context, output, formatting=codeblock)
 
 
+@poopese
 @maplebot.command()
 @debug_command()
 async def setupdb():
@@ -1050,6 +1078,7 @@ async def setupdb():
     conn.close()
 
 
+@poopese
 @maplebot.command()
 @debug_command()
 async def populatesetinfo():
@@ -1075,6 +1104,7 @@ async def populatesetinfo():
     conn.close()
 
 
+@poopese
 @maplebot.command()
 @debug_command()
 async def populatecardinfo():
@@ -1093,6 +1123,7 @@ async def populatecardinfo():
     await maplebot.say("i'm back!")
 
 
+@poopese
 @maplebot.command(pass_context=True)
 @debug_command()
 async def givebooster(context, card_set, target=None, amount: str = 1):
@@ -1109,6 +1140,7 @@ async def givebooster(context, card_set, target=None, amount: str = 1):
                          .format(amount, card_set, target_id))
 
 
+@poopese
 @maplebot.command(aliases=["adjustbux"])
 @debug_command()
 async def changebux(target, amount: float):
@@ -1116,17 +1148,20 @@ async def changebux(target, amount: float):
     await maplebot.reply("updated bux")
 
 
+@poopese
 @maplebot.command()
 async def mapletest():
     await maplebot.say("i'm {0} and my guts are made of python {1}, brah :surfer:"
                        .format(maplebot.user.name, sys.version.split()[0]))
 
 
+@poopese
 @maplebot.command()
 async def blackjack():
     await maplebot.say("```\n\nholy shit piss\n\n```")
 
 
+@poopese
 @maplebot.command(pass_context=True, aliases=["maplecard", "maplecardinfo"])
 async def cardinfo(context):
     message = context.message
@@ -1172,6 +1207,7 @@ async def cardinfo(context):
     await maplebot.reply(reply_string)
 
 
+@poopese
 @maplebot.command(pass_context=True, aliases=["maplecardsearch", "maplesearch"])
 async def cardsearch(context):
     query = context.message.content.split(maxsplit=1)
@@ -1197,6 +1233,7 @@ async def cardsearch(context):
     await maplebot.reply(reply_string)
 
 
+@poopese
 @maplebot.command(pass_context=True)
 async def hascard(context, target, card):
     card = context.message.content.split(maxsplit=2)[2]
@@ -1221,17 +1258,21 @@ async def hascard(context, target, card):
                                                                   card=result[0]))
 
 
+@poopese
 @maplebot.command(pass_context=True)
 async def setcode(context, set_name: str):
     set_name = context.message.content.split(maxsplit=1)[1]
     conn = sqlite3.connect('maple.db')
     cursor = conn.cursor()
-    cursor.execute("SELECT name, code FROM set_map WHERE name = :set_name COLLATE NOCASE", {"set_name": set_name})
-    result = cursor.fetchone()
+    cursor.execute("SELECT name, code FROM set_map WHERE name LIKE :set_name", {"set_name": '%{0}%'.format(set_name)})
+    results = cursor.fetchall()
     conn.close()
-    if not result:
-        return await maplebot.reply("set named *{0}* not found...".format(set_name))
-    return await maplebot.reply("code for set *{0[0]}* is **{0[1]}**".format(result))
+    if not results:
+        return await maplebot.reply("no sets matchin *{0}* were found...".format(set_name))
+    if len(results) > 14:
+        return await maplebot.reply("too many matching sets!! narrow it down a little")
+    outstring = '\n'.join(["code for set *{0[0]}* is **{0[1]}**".format(result) for result in results])
+    await maplebot.reply(outstring)
 
 
 @maplebot.event
@@ -1248,16 +1289,6 @@ async def on_message(message):
         return
     if message.content.startswith(maplebot.command_prefix):
         await maplebot.process_commands(message)
-        # if command in COMMANDS:
-        #     if command == "register" or is_registered(user):
-        #         await COMMANDS[command](user, message, client=CLIENT)
-        #     else:
-        #         await CLIENT.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
-        # elif command in DEBUG_COMMANDS:
-        #     if (user in DEBUG_WHITELIST):
-        #         await DEBUG_COMMANDS[command](user, message, client=CLIENT)
-        #     else:
-        #         await CLIENT.send_message(message.channel, "<@{0}> that's a debug command, you rascal!".format(user))
     else:
         bottalk_request = await bottalk.get_request(maplebot, message)
         if bottalk_request:
