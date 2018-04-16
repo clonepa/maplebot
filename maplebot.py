@@ -16,6 +16,7 @@ import bottalk
 import deckhash
 import mapleconfig
 
+import blackjack
 
 TOKEN = mapleconfig.get_token()
 MTGOX_CHANNEL_ID = mapleconfig.get_mainchannel_id()
@@ -1075,16 +1076,19 @@ async def changebux(target, amount: float):
     adjustbux(target, amount)
     await maplebot.reply("updated bux")
 
-
 @maplebot.command()
 async def mapletest():
     await maplebot.say("i'm {0} and my guts are made of python {1}, brah :surfer:"
                        .format(maplebot.user.name, sys.version.split()[0]))
 
-
 @maplebot.command()
-async def blackjack():
-    await maplebot.say("```\n\nholy shit piss\n\n```")
+async def blackjacktest():
+    hand = blackjack.deal_hand()
+    score = blackjack.eval_hand(hand)
+    outstring = ""
+    for h in hand:
+        outstring += h + " "
+    await maplebot.say(outstring + "\nHand Score: " + str(score))
 
 
 @maplebot.command(pass_context=True, aliases=["maplecard", "maplecardinfo"])
