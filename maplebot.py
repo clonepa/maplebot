@@ -16,6 +16,7 @@ import bottalk
 import deckhash
 import mapleconfig
 
+import blackjack
 
 TOKEN = mapleconfig.get_token()
 MTGOX_CHANNEL_ID = mapleconfig.get_mainchannel_id()
@@ -154,7 +155,7 @@ def verify_nick(nick):
     '''returns True if nick doesn't exist in db, False if it does'''
     conn = sqlite3.connect('maple.db')
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE name LIKE :name",
+    cursor.execute("SELECT * FROM users WHERE name = :name COLLATE NOCASE",
                    {"name": nick})
     result = cursor.fetchone()
     conn.close()
@@ -232,6 +233,7 @@ def cache_rarities(card_set):
 
     return cached_count
 
+
 def gen_booster(card_set, seeds):
     '''generates boosters for a card set from a list of seeds'''
     cardobj = load_mtgjson()
@@ -242,14 +244,14 @@ def gen_booster(card_set, seeds):
     rarity_dict = {
         "rarities": ["rare", "mythic rare", "uncommon", "common", "special", "land"],
         "other_shit": ["token", "marketing"]
-        }
+    }
 
     if card_set in cardobj:
         for seed in seeds:
 
             random.seed(seed['seed'])
             mybooster = []
-            if not 'booster' in cardobj[card_set]:
+            if 'booster' not in cardobj[card_set]:
                 booster = ["rare", "uncommon", "uncommon", "uncommon", "common", "common", "common",
                            "common", "common", "common", "common", "common", "common", "common"]
             else:
@@ -297,6 +299,7 @@ def gen_booster(card_set, seeds):
     cursor.connection.close()
     return outbooster
 
+
 def give_homie_some_lands(who):
     '''give 60 lands to new user'''
     conn = sqlite3.connect('maple.db')
@@ -319,20 +322,12 @@ def give_booster(owner, card_set, amount=1):
     cardobj = load_mtgjson()
     cursor.execute("SELECT card_set FROM cards WHERE card_set LIKE :cardset", {"cardset": card_set})
     if not (card_set in cardobj):
-        outmessage = "I don't know where to find that kind of booster..."
-        return outmessage
-    elif not cursor.fetchone():
-        outmessage = "that set's not in my brain!!"
-        return outmessage
-    elif not ('booster' in cardobj[card_set]):
-        outmessage = "I've heard of that set but I've never seen a booster for it, I'll see what I can do..."
-    cursor.execute("SELECT discord_id FROM users WHERE name LIKE :name OR discord_id LIKE :name",
-                   {"name": owner})
-    u = cursor.fetchone()[0]
+        raise KeyError
+    owner_id = get_user_record(owner, 'discord_id')
     for i in range(amount):
         random.seed()
         booster_seed = random.getrandbits(32)
-        cursor.execute("INSERT INTO booster_inventory VALUES (:owner, :cset, :seed)", {"owner": u, "cset": card_set, "seed": booster_seed})
+        cursor.execute("INSERT INTO booster_inventory VALUES (:owner, :cset, :seed)", {"owner": owner_id, "cset": card_set, "seed": booster_seed})
     conn.commit()
     conn.close()
     if outmessage == "":
@@ -518,18 +513,19 @@ def is_registered(discord_id):
 def get_user_record(who, field=None):
     conn = sqlite3.connect('maple.db')
     cursor = conn.cursor()
-    fields = field if field else "*"
-    cursor.execute("SELECT {0} FROM users WHERE discord_id='{1}' OR name='{1}'".format(fields, who))
+    cursor.execute("SELECT * FROM users WHERE discord_id=:who OR name=:who COLLATE NOCASE",
+                   {"who": who})
     columns = [description[0] for description in cursor.description]
     r = cursor.fetchone()
     conn.close()
-    if field:
-        return r[0]
-    else:
-        out_dict = collections.OrderedDict.fromkeys(columns)
-        for i, key in enumerate(out_dict):
-            out_dict[key] = r[i]
-        return dict(out_dict)
+    if not r:
+        return None
+
+    out_dict = collections.OrderedDict.fromkeys(columns)
+    for i, key in enumerate(out_dict):
+        out_dict[key] = r[i]
+
+    return out_dict[field] if field else out_dict
 
 
 def update_elo(who, elo):
@@ -630,6 +626,61 @@ def make_ptpb(text):
     return next(i.split()[1] for i in response.text.split('\n') if i.startswith('url:'))
 
 
+def split_every_n(tosplit, n: int, preserve_newline=False):
+    if preserve_newline:
+        out_list = []
+        out_string = ''
+        for line in tosplit.splitlines(True):
+            if len(out_string + line) < n:
+                out_string += line
+            else:
+                out_list.append(out_string)
+                out_string = line
+        out_list.append(out_string)
+        return out_list
+    else:
+        return [tosplit[i:i + n] for i in range(0, len(tosplit), n)]
+
+
+def codeblock(string):
+    return '```{0}```'.format(string)
+
+
+# -------------------          ------------------- #
+
+
+async def big_output_confirmation(context, output: str, max_len=1500, formatting=str):
+    '''checks if some output is longer than max_len(default: 1500). if so, asks user for confirmation on sending,
+        if confirmed, says output with formatting given by optional function parameter 'formatting' '''
+    def check(message):
+        msg = message.content.lower()
+        return (msg.startswith('y') or msg.startswith('n'))
+
+    output_length = len(output)
+    if output_length > max_len:
+        await maplebot.reply("do you really want me to send all this? it's {0} characters long... [y/n]".format(output_length))
+        reply = await maplebot.wait_for_message(channel=context.message.channel,
+                                                author=context.message.author,
+                                                check=check,
+                                                timeout=60)
+        if not reply:
+            return None
+        reply_content = reply.content.lower()
+        confirm = True if reply_content.startswith('y') else False
+        if confirm:
+            processed = split_every_n(output, max_len, True)
+        else:
+            await maplebot.reply("ok!")
+            return False
+    else:
+        processed = [output]
+
+    for split in processed:
+        await maplebot.say(formatting(split))
+        asyncio.sleep(0.05)
+    return True
+
+
 # ------------------- COMMANDS ------------------- #
 
 
@@ -638,7 +689,7 @@ async def register(context, nickname: str):
     user = context.message.author.id
     conn = sqlite3.connect('maple.db')
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM users WHERE discord_id=' + user)
+    cursor.execute('SELECT * FROM users WHERE discord_id=?', (user))
     if cursor.fetchall():
         await maplebot.reply("user with discord ID {0} already exists. don't try to pull a fast one on old maple!!"
                              .format(user))
@@ -646,7 +697,7 @@ async def register(context, nickname: str):
         await maplebot.reply("user with nickname {0} already exists. don't try to confuse old maple you hear!!"
                              .format(nickname))
     else:
-        cursor.execute("INSERT INTO users VALUES ('" + user + "','" + nickname + "',1500,50.00)")
+        cursor.execute("INSERT INTO users VALUES (?,?,1500,50.00)", (user, nickname))
         conn.commit()
         conn.close()
         give_homie_some_lands(user)
@@ -688,11 +739,12 @@ async def givecard(context):
     await maplebot.reply(reply_dict[result_dict['code']])
 
 
-# todo finish this
-# @maplebot.command(pass_context=True, aliases=['mtglinks'])
-# async def maplelinks(context):
-#     await maplebot.reply("Collection: http://qubeley.biz/mtg/collection/{0}\n".format(user)
-#     )
+@maplebot.command(pass_context=True, aliases=['mtglinks'])
+async def maplelinks(context):
+    username = get_user_record(context.message.author.id, 'name')
+    await maplebot.reply(("\nCollection: http://qubeley.biz/mtg/collection/{0}" +
+                          "\nDeckbuilder: http://qubeley.biz/mtg/deckbuilder/{0}"
+                          ).format(username))
 
 
 @maplebot.command(pass_context=True, aliases=['getcollection'])
@@ -882,7 +934,7 @@ async def recordmatch(context, winner, loser):
 async def hash(context):
     thing_to_hash = context.message.content[len(context.message.content.split()[0]):]
     hashed_thing = deckhash.make_deck_hash(*deckhash.convert_deck_to_boards(thing_to_hash))
-    await maplebot.reply('hashed deck: ' + hashed_thing)
+    await maplebot.reply('hashed deck: {0}'.format(hashed_thing))
 
 
 @maplebot.command(pass_context=True)
@@ -927,45 +979,31 @@ async def query(context):
     outstring = ""
     try:
         cursor.execute(query)
-        for i in cursor.fetchall():
-            if len(outstring) > 1500:
-                await maplebot.say("```" + outstring + "\n```")
-                outstring = ""
-            outstring += str(i) + "\n"
+        outstring = '\n'.join(str(x) for x in cursor.fetchall())
     except sqlite3.OperationalError:
-        outstring = "sqlite operational error homie...\n" + str(sys.exc_info()[1])
+        outstring = "sqlite operational error homie...\n{0}".format(sys.exc_info()[1])
 
     if outstring == "":
-        outstring = "No output so it probably worked"
-    await maplebot.say("```" + outstring + "```")
+        outstring = "rows affected : {0}".format(cursor.rowcount)
+    await big_output_confirmation(context, outstring, formatting=codeblock)
     conn.commit()
     conn.close()
 
 
 @maplebot.command(pass_context=True)
 @debug_command()
-async def gutdump(context, table: str = "users"):
+async def gutdump(context, table: str = "users", limit: int = 0):
     if table == "maple":
         with open(__file__) as file:
-            out = file.read(1024)
-            while out:
-                await maplebot.say("```" + out.replace("```", "[codeblock]") + "```")
-                out = file.read(1024)
-                await asyncio.sleep(0.25)
-        return
-    conn = sqlite3.connect('maple.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM " + table)
-    outstring = ""
-    names = [description[0] for description in cursor.description]
-    for i in cursor.fetchall():
-        if len(outstring) > 1500:
-            await maplebot.say("```" + str(names) + "\n\n" + outstring + "\n```")
-            outstring = ""
-        outstring += str(i) + "\n"
-    if outstring:
-        await maplebot.say("```" + str(names) + "\n\n" + outstring + "\n```")
-    conn.close()
+            output = file.read()
+    else:
+        conn = sqlite3.connect('maple.db')
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM {0} {1}".format(table, 'LIMIT {0}'.format(limit) if limit else ''))
+        output = "{names}\n\n{output}".format(names=[description[0] for description in cursor.description],
+                                              output='\n'.join(str(x) for x in cursor.fetchall()))
+        conn.close()
+    await big_output_confirmation(context, output, formatting=codeblock)
 
 
 @maplebot.command()
@@ -1063,7 +1101,10 @@ async def givebooster(context, card_set, target=None, amount: str = 1):
     if not target:
         target = context.message.author.id
     print('give_booster', target, card_set, amount)
-    give_booster(target, card_set, amount)
+    try:
+        give_booster(target, card_set, amount)
+    except KeyError:
+        return await maplebot.reply("{0} is not a valid set!!".format(card_set))
     target_id = get_user_record(target, 'discord_id')
     await maplebot.reply("{0} {1} booster(s) added to <@{2}>'s inventory!"
                          .format(amount, card_set, target_id))
@@ -1075,16 +1116,19 @@ async def changebux(target, amount: float):
     adjustbux(target, amount)
     await maplebot.reply("updated bux")
 
-
 @maplebot.command()
 async def mapletest():
     await maplebot.say("i'm {0} and my guts are made of python {1}, brah :surfer:"
                        .format(maplebot.user.name, sys.version.split()[0]))
 
-
 @maplebot.command()
-async def blackjack():
-    await maplebot.say("```\n\nholy shit piss\n\n```")
+async def blackjacktest():
+    hand = blackjack.deal_hand()
+    score = blackjack.eval_hand(hand)
+    outstring = ""
+    for h in hand:
+        outstring += h + " "
+    await maplebot.say(outstring + "\nHand Score: " + str(score))
 
 
 @maplebot.command(pass_context=True, aliases=["maplecard", "maplecardinfo"])
@@ -1157,25 +1201,27 @@ async def cardsearch(context):
     await maplebot.reply(reply_string)
 
 
-async def hascard(user, message, client=None):
+@maplebot.command(pass_context=True)
+async def hascard(context, target, card):
+    card = context.message.content.split(maxsplit=2)[2]
     cursor = sqlite3.connect('maple.db').cursor()
-    target, card = message.content.split(maxsplit=2)[1:]  # !hascard ari swamp
-
+    if not get_user_record(target):
+        return await maplebot.reply("user {0} doesn't exist!".format(target))
     cursor.execute('''SELECT cards.card_name, users.name, SUM(collection.amount_owned) FROM collection
                    INNER JOIN cards ON collection.multiverse_id = cards.multiverse_id
                    INNER JOIN users ON collection.owner_id      = users.discord_id
                    WHERE cards.card_name LIKE :card
-                   AND (users.name LIKE :target  OR  users.discord_id LIKE :target)
+                   AND (users.name = :target COLLATE NOCASE OR  users.discord_id = :target)
                    GROUP BY cards.card_name''',
                    {'card': card, 'target': target})
     result = cursor.fetchone()
+    cursor.connection.close()
     if not result:
-        await client.send_message(message.channel, '<@{0}> {1} has no card named "{2}"'.format(user, target, card))
+        await maplebot.reply('{1} has no card named "{2}"'.format(target, card))
         return
-    await client.send_message(message.channel, '<@{user}> {target} has {amount} of {card}'.format(user=user,
-                                                                                                  target=result[1],
-                                                                                                  amount=result[2],
-                                                                                                  card=result[0]))
+    await maplebot.reply('{target} has {amount} of {card}'.format(target=result[1],
+                                                                  amount=result[2],
+                                                                  card=result[0]))
 
 
 @maplebot.event
