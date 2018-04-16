@@ -35,7 +35,7 @@
     			}    
          	}
          	if (!foundit) {
-         		dataSet2.push([ {{ card.amount }}, "{{ card.name }}", ["{{ card.set }}"], "{{ card.type }}", "{{ card.rarity }}", "{{ card.color }}", {{ card.multiverseid }} ])
+         		dataSet2.push([ {{ card.amount }}, "{{ card.name }}", ["{{ card.set }}"], "{{ card.type }}", "{{ card.rarity }}", "{{ card.color }}", {{ card.multiverseid }}, {{ card.cmc }}, "{{ card.date }}" ])
          	}
          {% endfor %}
 
@@ -44,13 +44,15 @@
 		    var table = $('#collection').DataTable( {
 		        data: dataSet2,
 		        columns: [
-		            { title: "Amount" },
+		            { title: "#" },
 		            { title: "Name" },
 		            { title: "Set" },
 		            { title: "Type" },
 		            { title: "Rarity" },
 		            { title: "Color"},
-		            { title: "MVerse ID"}],
+		            { title: "MVerse ID"},
+		            { title: "CMC"},
+		            { title: "Last Obtained", "bSearchable": false}],
 
 		         "columnDefs": [
             	{
