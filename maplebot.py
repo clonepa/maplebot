@@ -1217,7 +1217,7 @@ async def hascard(context, target, card):
     result = cursor.fetchone()
     cursor.connection.close()
     if not result:
-        await maplebot.reply('{1} has no card named "{2}"'.format(target, card))
+        await maplebot.reply('{0} has no card named "{1}"'.format(target, card))
         return
     await maplebot.reply('{target} has {amount} of {card}'.format(target=result[1],
                                                                   amount=result[2],
