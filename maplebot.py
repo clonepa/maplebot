@@ -47,7 +47,17 @@ except FileNotFoundError:
 maplebot = commands.Bot(command_prefix='!', description='maple the magic cat', help_attrs={"name": "maplehelp"})
 
 
-# ---- check decorators for commands ---- #
+# ---- decorators for commands ---- #
+
+def poopese(cmd):
+    oldaliases = [cmd.name] + cmd.aliases
+    newaliases = []
+    for alias in oldaliases:
+        newalias = alias.replace('n', 'm').replace('b', 'v')
+        if newalias != alias:
+            newaliases.append(newalias)
+    for newalias in newaliases:
+        maplebot.commands[newalias] = cmd
 
 
 def debug_command():
@@ -777,7 +787,7 @@ async def checkdeck(context):
                                     .format(message.author.id, hashed_deck))
 
 
-@maplebot.command(pass_context=True, aliases=['boosterprice'])
+@maplebot.command(pass_context=True, aliases=['boosterprice', 'checkprice'])
 async def packprice(context, card_set: str):
     '''!packprice [setcode]
     returns mtgo booster pack price for the set via mtggoldfish'''
@@ -908,23 +918,26 @@ async def buybooster(context, card_set: to_upper, amount: int = 1):
 @maplebot.command(pass_context=True)
 @requires_registration()
 async def recordmatch(context, winner, loser):
-    winner_elo = get_user_record(winner, "elo_rating")
-    loser_elo = get_user_record(loser, "elo_rating")
+    winner_record = get_user_record(winner)
+    loser_record = get_user_record(loser)
+    winner_elo = winner_record['elo_rating']
+    loser_elo = loser_record['elo_rating']
     new_elo = calc_elo_change(winner_elo, loser_elo)
-    print(winner_elo, loser_elo, new_elo)
     bux_adjustment = 3.00 * (new_elo[0] - winner_elo) / 32
     bux_adjustment = round(bux_adjustment, 2)
     loser_bux_adjustment = round(bux_adjustment / 3, 2)
 
-    update_elo(winner, new_elo[0])
-    update_elo(loser, new_elo[1])
+    winnerid, loserid = winner_record['discord_id'], loser_record['discord_id']
 
-    adjustbux(winner, bux_adjustment)
-    adjustbux(loser, bux_adjustment / 3)
+    update_elo(winnerid, new_elo[0])
+    update_elo(loserid, new_elo[1])
+
+    adjustbux(winnerid, bux_adjustment)
+    adjustbux(loserid, bux_adjustment / 3)
     await maplebot.reply("{0} new elo: {1}\n{2} new elo: {3}\n{0} payout: ${4}\n{2} payout: ${5}"
-                         .format(winner,
+                         .format(winner_record['name'],
                                  new_elo[0],
-                                 loser,
+                                 loser_record['name'],
                                  new_elo[1],
                                  bux_adjustment,
                                  loser_bux_adjustment))
@@ -1094,9 +1107,9 @@ async def populatecardinfo():
     await maplebot.say("i'm back!")
 
 
-@maplebot.command(pass_context=True)
+@maplebot.command(pass_context=True, aliases=["givepack"])
 @debug_command()
-async def givebooster(context, card_set, target=None, amount: str = 1):
+async def givebooster(context, card_set, target=None, amount: int = 1):
     card_set = card_set.upper()
     if not target:
         target = context.message.author.id
@@ -1205,7 +1218,8 @@ async def cardsearch(context):
 async def hascard(context, target, card):
     card = context.message.content.split(maxsplit=2)[2]
     cursor = sqlite3.connect('maple.db').cursor()
-    if not get_user_record(target):
+    target_record = get_user_record(target)
+    if not target_record:
         return await maplebot.reply("user {0} doesn't exist!".format(target))
     cursor.execute('''SELECT cards.card_name, users.name, SUM(collection.amount_owned) FROM collection
                    INNER JOIN cards ON collection.multiverse_id = cards.multiverse_id
@@ -1217,11 +1231,27 @@ async def hascard(context, target, card):
     result = cursor.fetchone()
     cursor.connection.close()
     if not result:
-        await maplebot.reply('{0} has no card named "{1}"'.format(target, card))
+        await maplebot.reply('{0} has no card named "{1}"'.format(target_record['name'], card))
         return
     await maplebot.reply('{target} has {amount} of {card}'.format(target=result[1],
                                                                   amount=result[2],
                                                                   card=result[0]))
+
+
+@maplebot.command(pass_context=True)
+async def setcode(context, set_name: str):
+    set_name = context.message.content.split(maxsplit=1)[1]
+    conn = sqlite3.connect('maple.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT name, code FROM set_map WHERE name LIKE :set_name", {"set_name": '%{0}%'.format(set_name)})
+    results = cursor.fetchall()
+    conn.close()
+    if not results:
+        return await maplebot.reply("no sets matchin *{0}* were found...".format(set_name))
+    if len(results) > 14:
+        return await maplebot.reply("too many matching sets!! narrow it down a little")
+    outstring = '\n'.join(["code for set *{0[0]}* is **{0[1]}**".format(result) for result in results])
+    await maplebot.reply(outstring)
 
 
 @maplebot.event
@@ -1238,16 +1268,6 @@ async def on_message(message):
         return
     if message.content.startswith(maplebot.command_prefix):
         await maplebot.process_commands(message)
-        # if command in COMMANDS:
-        #     if command == "register" or is_registered(user):
-        #         await COMMANDS[command](user, message, client=CLIENT)
-        #     else:
-        #         await CLIENT.send_message(message.channel, "<@{0}>, you ain't registered!!".format(user))
-        # elif command in DEBUG_COMMANDS:
-        #     if (user in DEBUG_WHITELIST):
-        #         await DEBUG_COMMANDS[command](user, message, client=CLIENT)
-        #     else:
-        #         await CLIENT.send_message(message.channel, "<@{0}> that's a debug command, you rascal!".format(user))
     else:
         bottalk_request = await bottalk.get_request(maplebot, message)
         if bottalk_request:
@@ -1258,4 +1278,7 @@ async def on_message(message):
 
 
 if __name__ == "__main__":
+    commands = list(maplebot.commands.keys())[:]
+    for command in commands:
+        poopese(maplebot.commands[command])
     maplebot.run(TOKEN)
