@@ -45,8 +45,8 @@ except FileNotFoundError:
 
 maplebot = commands.Bot(command_prefix='!', description='maple the magic cat', help_attrs={"name": "maplehelp"})
 
-
 # ---- decorators for commands ---- #
+
 
 def poopese(cmd):
     oldaliases = [cmd.name] + cmd.aliases
@@ -57,6 +57,7 @@ def poopese(cmd):
             newaliases.append(newalias)
     for newalias in newaliases:
         maplebot.commands[newalias] = cmd
+        maplebot.get_command(cmd.name).aliases += [newalias]
 
 
 def debug_command():
@@ -89,6 +90,60 @@ def to_lower(argument):
 
 
 # ---- utility functions ---- #
+
+
+def update_user_collection(user, multiverse_id, amount=1, conn=None):
+    '''Updates the entry on table `collection` for card of multiverse id arg(multiverse_id) owned by arg(user) (discord_id string).
+    If no entry and arg(amount) is positive, creates entry with amount_owned = arg(amount).
+    If entry already exists, changes its amount_owned by arg(amount), down to zero.
+    Allows for passing an existing sqlite3 connection to arg(conn) for mass card updatings.
+    Returns amount of cards actually added/removed.'''
+
+    # check if an existing sqlite connection was provided, record whether it was, if it wasn't create one
+    selfconn = False if conn else True
+    if not conn:
+        conn = sqlite3.connect('maple.db')
+    cursor = conn.cursor()
+
+    # amount = 0 is pointless, so return 0 cards added
+    if amount == 0:
+        return 0
+
+    cursor.execute('''SELECT amount_owned FROM collection WHERE owner_id=:name
+                   AND multiverse_id=:mvid AND amount_owned > 0''',
+                   {"name": user, "mvid": multiverse_id})
+    has_already = cursor.fetchone()
+
+    # if we're trying to remove a card that isn't there, return 0 cards added
+    if amount < 0 and not has_already:
+        return 0
+    # otherwise, we're adding the card, so if it isn't there, create the entry
+    elif not has_already:
+        amount_to_change = amount
+        cursor.execute("INSERT INTO collection VALUES (:name, :mvid, :amount, CURRENT_TIMESTAMP)",
+                       {"name": user,
+                        "mvid": multiverse_id,
+                        "amount": amount})
+    # at this point we know the user already has some of the card, so update the amount_owned, increasing it or decreasing it
+    else:
+        amount_owned = has_already[0]
+        # select the real amount to change
+        # if amount < 0, pick amount_owned if amount would remove more than that, else just amount
+        # if amount > 0, it's just amount
+        if amount < 0:
+            amount_to_change = -amount_owned if (-amount > amount_owned) else amount
+        else:
+            amount_to_change = amount
+        cursor.execute("UPDATE collection SET amount_owned = amount_owned + :amount WHERE owner_id=:name AND multiverse_id=:mvid",
+                       {"name": user,
+                        "mvid": multiverse_id,
+                        "amount": amount_to_change})
+    conn.commit()
+
+    # if sqlite connection was self-contained, close it
+    if selfconn:
+        conn.close()
+    return amount_to_change
 
 
 def search_card(query, page=1):
@@ -693,6 +748,28 @@ async def big_output_confirmation(context, output: str, max_len=1500, formatting
 # ------------------- COMMANDS ------------------- #
 
 
+@maplebot.command()
+@debug_command()
+async def updatecollection(target: str, card_id: str, amount: int = 1):
+    target_record = get_user_record(target)
+    if not target_record:
+        return await maplebot.reply("invalid user")
+    conn = sqlite3.connect('maple.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT card_name FROM cards WHERE multiverse_id = ?', (card_id,))
+    result = cursor.fetchone()
+    if not result:
+        conn.close()
+        return await maplebot.reply("no card with multiverse id {0} found!".format(card_id))
+    card_name = result[0]
+    updated = update_user_collection(target_record['discord_id'], card_id, amount, conn)
+    conn.close()
+    target_name = target_record['name']
+    if not updated:
+        return await maplebot.reply("no changes made to cards `{0}` owned by {1}.".format(card_name, target_name))
+    return await maplebot.reply("changed amount of cards `{0}` owned by {1} by {2}.".format(card_name, target_name, updated))
+
+
 @maplebot.command(pass_context=True, no_pm=True, aliases=['mapleregister'])
 async def register(context, nickname: str):
     user = context.message.author.id
@@ -1220,16 +1297,16 @@ async def hascard(context, target, card):
     cursor.execute('''SELECT cards.card_name, users.name, SUM(collection.amount_owned) FROM collection
                    INNER JOIN cards ON collection.multiverse_id = cards.multiverse_id
                    INNER JOIN users ON collection.owner_id      = users.discord_id
-                   WHERE cards.card_name LIKE :card
+                   WHERE (cards.card_name LIKE :card OR cards.multiverse_id = :card)
                    AND (users.name = :target COLLATE NOCASE OR  users.discord_id = :target)
                    GROUP BY cards.card_name''',
                    {'card': card, 'target': target})
     result = cursor.fetchone()
     cursor.connection.close()
     if not result:
-        await maplebot.reply('{0} has no card named "{1}"'.format(target_record['name'], card))
+        await maplebot.reply('{0} has no card `{1}`'.format(target_record['name'], card))
         return
-    await maplebot.reply('{target} has {amount} of {card}'.format(target=result[1],
+    await maplebot.reply('{target} has {amount} of `{card}`'.format(target=result[1],
                                                                   amount=result[2],
                                                                   card=result[0]))
 
