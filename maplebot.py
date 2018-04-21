@@ -24,9 +24,6 @@ TOKEN = mapleconfig.get_token()
 MTGOX_CHANNEL_ID = mapleconfig.get_mainchannel_id()
 DEBUG_WHITELIST = mapleconfig.get_debug_whitelist()
 
-os.environ['COLOREDLOGS_LOG_FORMAT'] = "%(asctime)s %(name)s %(levelname)s %(message)s"
-coloredlogs.install(level='INFO')
-
 IN_TRANSACTION = []
 
 logger = logging.getLogger('maplebot')
@@ -167,13 +164,24 @@ def load_mtgjson():
     '''Reads AllSets.json from mtgjson and returns the resulting dict'''
     with open('AllSets.json', encoding="utf8") as allsets_file:
         cardobj = json.load(allsets_file)
+
+    patch_dict = {}
+    patch_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'json_patches')
+    for patch_file in os.listdir(patch_dir):
+        with open(os.path.join(os.path.join(patch_dir, patch_file))) as f:
+            setname = patch_file[:-5]
+            patch_dict[setname] = json.load(f)
+
     # force set codes to caps
     cursor = sqlite3.connect('maple.db').cursor()
     cursor.execute("SELECT code FROM set_map")
     sets = cursor.fetchall()
 
     for card_set in sets:
-        if card_set[0] in cardobj:
+        if card_set[0] in patch_dict:
+            logger.info('Patching JSON for {}'.format(card_set[0]))
+            cardobj[card_set[0].upper()] = patch_dict[card_set[0]]
+        elif card_set[0] in cardobj:
             cardobj[card_set[0].upper()] = cardobj.pop(card_set[0])
 
     cursor.connection.close()
@@ -463,18 +471,22 @@ def open_booster(owner, card_set, amount):
     return opened_boosters
 
 
-def load_set_json(card_set):
+def load_set_json(card_set, cardobj=None):
     count = 0
-    cardobj = load_mtgjson()
+    if not cardobj:
+        cardobj = load_mtgjson()
 
     conn = sqlite3.connect('maple.db')
     cursor = conn.cursor()
     if card_set in cardobj:
         for card in cardobj[card_set]['cards']:
-            # skip card if it's the back side of a double-faced card
-            if card['layout'] in ('double-faced', 'split', 'aftermath') and not card['number'].endswith('a'):
-                logger.info('card {0} is double-faced or split and not main, skipping'.format(card['name']))
-                continue
+            # skip card if it's the back side of a double-faced card or the second half of a split card
+            if card['layout'] in ('double-faced', 'split', 'aftermath'):
+                if card['name'] != card['names'][0]:
+                    logger.info('{name} is of layout {layout} and is not main card {names[0]}, skipping'.format(**card))
+            elif card['layout'] == 'meld':
+                if card['name'] == card['names'][-1]:
+                    logger.info('{name} is of layout {layout} and is final card, skipping'.format(**card))
             # if multiverseID doesn't exist, generate fallback negative multiverse ID using set and name as seed
             if 'multiverseid' in card:
                 mvid = card['multiverseid']
@@ -914,7 +926,7 @@ async def draftadd(target, sets, deck):
         counter += added
 
     conn.close()
-    await maplebot.reply('added {0} cards from sets `{1}` to collection of <@{2}?'.format(counter, sets, target_id))
+    await maplebot.reply('added {0} cards from sets `{1}` to collection of <@{2}>'.format(counter, sets, target_id))
 
     # update_user_collection()
 
@@ -1232,7 +1244,7 @@ async def populatecardinfo():
     for card_set in cardobj:
         if "code" not in cardobj[card_set]:
             continue
-        count += load_set_json(cardobj[card_set]['code'].upper())
+        count += load_set_json(cardobj[card_set]['code'].upper(), cardobj)
         setcount += 1
         logger.info("populated {1} cards from set #{0}".format(count, setcount))
     logger.info('added {0} cards from {1} sets'.format(count, setcount))
@@ -1411,6 +1423,8 @@ async def on_message(message):
 
 
 if __name__ == "__main__":
+    os.environ['COLOREDLOGS_LOG_FORMAT'] = "%(asctime)s %(name)s %(levelname)s %(message)s"
+    coloredlogs.install(level='INFO')
     commands = list(maplebot.commands.keys())[:]
     for command in commands:
         poopese(maplebot.commands[command])
