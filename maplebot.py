@@ -472,8 +472,8 @@ def load_set_json(card_set):
     if card_set in cardobj:
         for card in cardobj[card_set]['cards']:
             # skip card if it's the back side of a double-faced card
-            if card['layout'] == 'double-faced' and not card['number'].endswith('a'):
-                logger.info('card {0} is double-faced and not front, skipping'.format(card['name']))
+            if card['layout'] in ('double-faced', 'split', 'aftermath') and not card['number'].endswith('a'):
+                logger.info('card {0} is double-faced or split and not main, skipping'.format(card['name']))
                 continue
             # if multiverseID doesn't exist, generate fallback negative multiverse ID using set and name as seed
             if 'multiverseid' in card:
@@ -486,8 +486,9 @@ def load_set_json(card_set):
                 colors = "Colorless"
             else:
                 colors = ",".join(card['colors'])
+            cname = ' // '.join(card['names']) if card['layout'] in ('split', 'aftermath') else card['name']
             cursor.execute("INSERT OR IGNORE INTO cards VALUES(?, ?, ?, ?, ?, ?, ?)",
-                           (mvid, card['name'], card_set, card['type'], card['rarity'], colors, card['cmc']))
+                           (mvid, cname, card_set, card['type'], card['rarity'], colors, card['cmc']))
             count += 1
         conn.commit()
         conn.close()
@@ -592,7 +593,7 @@ def get_user_record(who, field=None):
     r = cursor.fetchone()
     conn.close()
     if not r:
-        return None
+        raise KeyError
 
     out_dict = collections.OrderedDict.fromkeys(columns)
     for i, key in enumerate(out_dict):
@@ -870,6 +871,52 @@ async def checkdeck(context):
         await maplebot.send_message(maplebot.get_channel(MTGOX_CHANNEL_ID),
                                     "<@{0}> has submitted a collection-valid deck! hash: `{1}`"
                                     .format(message.author.id, hashed_deck))
+
+
+@maplebot.command()
+@debug_command()
+async def draftadd(target, sets, deck):
+    # await maplebot.type()
+    deck = deck.strip()
+    deck = deckhash.convert_deck_to_boards(deck)
+    deck = collections.Counter(deck[0] + deck[1])
+
+    sets = sets.split()
+
+    conn = sqlite3.connect('maple.db')
+    cursor = conn.cursor()
+
+    target_id = get_user_record(target, 'discord_id')
+
+    ids_to_add = []
+
+    logger.info('have deck with {} cards'.format(sum(deck.values())))
+    for card in deck:
+        logger.info('adding {0}x{1}'.format(card, deck[card]))
+
+        cursor.execute("SELECT multiverse_id FROM cards WHERE card_name LIKE :name AND card_set IN ({0})"
+                       .format(','.join(["'{}'".format(s) for s in sets])),
+                       {'name': card})
+        result = cursor.fetchall()
+        if not result:
+            print('Could not find {}'.format(card))
+            raise KeyError
+        for i in range(deck[card]):
+            ids_to_add.append(random.choice(result)[0])
+    ids_to_add = collections.Counter(ids_to_add)
+    logger.info('have ids_to_add with {} cards'.format(sum(ids_to_add.values())))
+
+    logger.info('adding...')
+    counter = 0
+    for mvid in ids_to_add:
+        update_user_collection
+        added = update_user_collection(target_id, mvid, ids_to_add[mvid], conn)
+        counter += added
+
+    conn.close()
+    await maplebot.reply('added {0} cards from sets `{1}` to collection of <@{2}?'.format(counter, sets, target_id))
+
+    # update_user_collection()
 
 
 @maplebot.command(pass_context=True, aliases=['boosterprice', 'checkprice'])
@@ -1192,9 +1239,15 @@ async def populatecardinfo():
     await maplebot.say("i'm back!")
 
 
+@maplebot.command()
+@debug_command()
+async def loadsetjson(cardset):
+    load_set_json(cardset)
+
+
 @maplebot.command(pass_context=True)
 @debug_command()
-async def givebooster(context, card_set, target=None, amount: str = 1):
+async def givebooster(context, card_set, target=None, amount: int = 1):
     card_set = card_set.upper()
     if not target:
         target = context.message.author.id
