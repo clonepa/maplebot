@@ -169,7 +169,7 @@ def load_mtgjson():
     patch_dict = {}
     patch_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'json_patches')
     for patch_file in os.listdir(patch_dir):
-        with open(os.path.join(os.path.join(patch_dir, patch_file))) as f:
+        with open(os.path.join(os.path.join(patch_dir, patch_file)), encoding="utf8") as f:
             setname = patch_file[:-5]
             patch_dict[setname] = json.load(f)
 
