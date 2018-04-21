@@ -5,10 +5,13 @@ import sys
 import random
 import json
 import re
+import os
 import time
 import base64
 import collections
+import logging
 
+import coloredlogs
 import requests
 from discord.ext import commands
 
@@ -21,25 +24,31 @@ TOKEN = mapleconfig.get_token()
 MTGOX_CHANNEL_ID = mapleconfig.get_mainchannel_id()
 DEBUG_WHITELIST = mapleconfig.get_debug_whitelist()
 
+os.environ['COLOREDLOGS_LOG_FORMAT'] = "%(asctime)s %(name)s %(levelname)s %(message)s"
+coloredlogs.install(level='INFO')
+
 IN_TRANSACTION = []
 
-print('Loading booster price overrides...')
+logger = logging.getLogger('maplebot')
+
+
+logger.info('Loading booster price overrides...')
 try:
     with open('pack_price_override.json', 'r') as override_file:
         BOOSTER_OVERRIDE = json.load(override_file)
-    print('Loaded {amount} booster price overrides'.format(amount=len(BOOSTER_OVERRIDE)))
+    logger.info('Loaded {amount} booster price overrides'.format(amount=len(BOOSTER_OVERRIDE)))
 except FileNotFoundError:
-    print('No booster price override file found')
+    logger.warn('No booster price override file found')
     BOOSTER_OVERRIDE = {}
 
 
-print('Loading rarity cache...')
+logger.info('Loading rarity cache...')
 try:
     with open('rarity_cache.json', 'r') as raritycache_file:
         RARITY_CACHE = collections.defaultdict(str, json.load(raritycache_file))
-    print('Loaded rarity cache with {sets} sets'.format(sets=len(RARITY_CACHE)))
+    logger.info('Loaded rarity cache with {sets} sets'.format(sets=len(RARITY_CACHE)))
 except FileNotFoundError:
-    print('No rarity cache found')
+    logger.warn('No rarity cache found')
     RARITY_CACHE = collections.defaultdict(str)
 
 
@@ -186,17 +195,17 @@ def get_booster_price(card_set):
             cursor.execute('''UPDATE timestamped_base64_strings
                             SET b64str=:b64str, timestamp=:timestamp WHERE name="mtggoldfish"''',
                            {"b64str": b64html, "timestamp": time.time()})
-            print("mtggoldfish data stale, fetched new data")
+            logger.info("mtggoldfish data stale, fetched new data")
         else:
             goldfish_html = base64.b64decode(result[1]).decode()
-            print("mtggoldfish data fresh!")
+            logger.info("mtggoldfish data fresh!")
     else:
         goldfish_html = requests.get('https://www.mtggoldfish.com/prices/online/boosters').text
         b64html = base64.b64encode(str.encode(goldfish_html))
         cursor.execute('''INSERT INTO timestamped_base64_strings
                           values ('mtggoldfish', :b64str, :timestamp)''',
                        {"b64str": b64html, "timestamp": time.time()})
-        print("No mtggoldfish cache, created new record...")
+        logger.info("No mtggoldfish cache, created new record...")
 
     conn.commit()
     conn.close()
@@ -289,11 +298,11 @@ def cache_rarities(card_set):
     RARITY_CACHE[card_set] = dict(set_rarity_dict)
 
     cached_count = sum([len(set_rarity_dict[rarity]) for rarity in set_rarity_dict])
-    print("just cached", cached_count, "card rarities from", card_set)
-    print("saving cache to disk...")
+    logger.info("just cached {0} card rarities from {1}".format(cached_count, card_set))
+    logger.info("saving cache to disk...")
     with open('rarity_cache.json', 'w') as outfile:
         json.dump(RARITY_CACHE, outfile)
-    print("saved cache with {sets} sets".format(sets=len(RARITY_CACHE)))
+    logger.info("saved cache with {sets} sets".format(sets=len(RARITY_CACHE)))
 
     return cached_count
 
@@ -334,7 +343,7 @@ def gen_booster(card_set, seeds):
                         mybooster.append(random.choice(i))
 
             if not RARITY_CACHE[card_set]:
-                print(card_set, "rarities not cached, workin on it...")
+                logger.info(card_set, "rarities not cached, workin on it...")
                 cache_rarities(card_set)
 
             generated_booster = []
@@ -350,7 +359,7 @@ def gen_booster(card_set, seeds):
                         # this flattens the rarity dict so we get all the cards
                         card_pool = sorted({x for v in RARITY_CACHE[card_set].values() for x in v})
                 except KeyError:
-                    print('WARNING no cards of rarity {0} in set {1}'.format(rarity_card, card_set))
+                    logger.warn('no cards of rarity {0} in set {1}'.format(rarity_card, card_set))
                     card_pool = []
                 if card_pool:
                     chosen_card_id = random.choice(card_pool)
@@ -464,7 +473,7 @@ def load_set_json(card_set):
         for card in cardobj[card_set]['cards']:
             # skip card if it's the back side of a double-faced card
             if card['layout'] == 'double-faced' and not card['number'].endswith('a'):
-                print('card {0} is double-faced and not front, skipping'.format(card['name']))
+                logger.info('card {0} is double-faced and not front, skipping'.format(card['name']))
                 continue
             # if multiverseID doesn't exist, generate fallback negative multiverse ID using set and name as seed
             if 'multiverseid' in card:
@@ -472,7 +481,7 @@ def load_set_json(card_set):
             else:
                 random.seed(card['name'] + card_set)
                 mvid = -random.randrange(100000000)
-                # print('IDless card {0} assigned fallback ID {1}'.format(card['name'], mvid))
+                logger.info('IDless card {0} assigned fallback ID {1}'.format(card['name'], mvid))
             if 'colors' not in card:
                 colors = "Colorless"
             else:
@@ -485,7 +494,7 @@ def load_set_json(card_set):
         return count
     else:
         conn.close()
-        print(card_set + " not in cardobj!")
+        logger.info(card_set + " not in cardobj!")
         return 0
 
 
@@ -671,7 +680,7 @@ def give_card(user, target, card, amount):
         conn.commit()
         counter -= iter_amount
         if counter < 0:
-            print('you fucked something up dogg, counter is', counter)
+            logger.warn('you fucked something up dogg, counter is ' + counter)
             break
         if counter == 0:
             conn.commit()
@@ -1149,7 +1158,7 @@ async def populatesetinfo():
     conn = sqlite3.connect('maple.db')
     cursor = conn.cursor()
     for card_set in cardobj:
-        print(cardobj[card_set]["name"])
+        logger.info(cardobj[card_set]["name"])
         name = ""
         code = ""
         alt_code = ""
@@ -1178,8 +1187,8 @@ async def populatecardinfo():
             continue
         count += load_set_json(cardobj[card_set]['code'].upper())
         setcount += 1
-        print(count, setcount)
-    print('added {0} cards from {1} sets'.format(count, setcount))
+        logger.info("populated {1} cards from set #{0}".format(count, setcount))
+    logger.info('added {0} cards from {1} sets'.format(count, setcount))
     await maplebot.say("i'm back!")
 
 
@@ -1189,7 +1198,7 @@ async def givebooster(context, card_set, target=None, amount: str = 1):
     card_set = card_set.upper()
     if not target:
         target = context.message.author.id
-    print('give_booster', target, card_set, amount)
+    logger.info('giving {0} booster(s) of set {1} to {2}'.format(amount, card_set, target))
     try:
         give_booster(target, card_set, amount)
     except KeyError:
@@ -1255,8 +1264,8 @@ async def cardinfo(context):
                     'Set: {card_set}',
                     printings_string,
                     gatherer_string,
-                    card['card_faces'][0]['image_uris']['large'] if 'card_faces' in card
-                    else card['image_uris']['large']]
+                    card['image_uris']['large'] if 'image_uris' in card
+                    else card['card_faces'][0]['image_uris']['large']]
     reply_string = '\n'.join(reply_string).format(card_name=card['name'],
                                                   card_set=card['set'].upper())
     await maplebot.reply(reply_string)
@@ -1307,8 +1316,8 @@ async def hascard(context, target, card):
         await maplebot.reply('{0} has no card `{1}`'.format(target_record['name'], card))
         return
     await maplebot.reply('{target} has {amount} of `{card}`'.format(target=result[1],
-                                                                  amount=result[2],
-                                                                  card=result[0]))
+                                                                    amount=result[2],
+                                                                    card=result[0]))
 
 
 @maplebot.command(pass_context=True)
@@ -1329,10 +1338,8 @@ async def setcode(context, set_name: str):
 
 @maplebot.event
 async def on_ready():
-    print('Logged in as')
-    print(maplebot.user.name)
-    print(maplebot.user.id)
-    print('------')
+    logger.info('maplebot is ready')
+    logger.info('[username: {0.name} || id: {0.id}]'.format(maplebot.user))
 
 
 @maplebot.event
