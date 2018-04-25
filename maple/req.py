@@ -1,5 +1,6 @@
-from .. import mapleconfig
+import mapleconfig
 from . import users
+
 import asyncio
 
 from discord.ext import commands

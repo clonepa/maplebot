@@ -104,11 +104,13 @@ class CardInfo():
             card = requests.get('https://api.scryfall.com/cards/random').json()
         else:
             query = query[1]
-            search_result = search_card(query)
-            while random.uniform(0, 1) > 0.5:
+            page = 1
+            search_result = search_card(query, page)
+            while random.uniform(0, 1) > 0.25:
                 if search_result['has_more']:
                     print('goin to next page...')
-                    search_result = search_card(query, page=search_result['page'] + 1)
+                    page += 1
+                    search_result = search_card(query, page=page)
                 else:
                     break
             card = random.choice(search_result['data'])
