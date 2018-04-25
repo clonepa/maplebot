@@ -1081,16 +1081,20 @@ async def mapletest():
     await maplebot.say("i'm {0} and my guts are made of python {1}, brah :surfer:"
                        .format(maplebot.user.name, sys.version.split()[0]))
 
-@maplebot.command()
-async def blackjacktest():
-    hand = blackjack.deal_hand()
-    score = blackjack.eval_hand(hand)
-    outstring = ""
-    for h in hand:
-        outstring += h + " "
-    await maplebot.say(outstring + "\nHand Score: " + str(score))
-
-
+reactables = []
+@maplebot.command(pass_context=True, aliases=["blk", "blowjob", "bj"])
+async def blackjacktest(context):
+    command = context.message.content.split()[1]
+    user = context.message.author.id
+    
+    if command == "new":
+        global reactables
+        new_bj = blackjack.BlackJackMachine(maplebot)
+        new_bj.msg = await maplebot.say(new_bj.print_state())
+        for emoji in new_bj.cmd_reactions_add:
+            await maplebot.add_reaction(new_bj.msg, emoji)
+        reactables += [new_bj]
+            
 @maplebot.command(pass_context=True, aliases=["maplecard", "maplecardinfo"])
 async def cardinfo(context):
     message = context.message
@@ -1189,6 +1193,15 @@ async def on_ready():
     print(maplebot.user.id)
     print('------')
 
+@maplebot.event
+async def on_reaction_add(reaction, user):
+    if user == maplebot.user:
+        return
+    
+    for sweetbaby in reactables:
+        if sweetbaby.msg.id != None and (sweetbaby.msg.id == reaction.message.id):
+            await sweetbaby.parse_reaction_add(reaction, user)
+            
 
 @maplebot.event
 async def on_message(message):
