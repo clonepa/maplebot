@@ -70,24 +70,6 @@ def poopese(cmd):
         maplebot.get_command(cmd.name).aliases += [newalias]
 
 
-def debug_command():
-    def predicate(context):
-        is_debugger = context.message.author.id in DEBUG_WHITELIST
-        if not is_debugger and context.command.name != "maplehelp":
-            asyncio.ensure_future(maplebot.reply("that's a debug command, you rascal!"))
-        return is_debugger
-    return commands.check(predicate)
-
-
-def requires_registration():
-    def predicate(context):
-        registered = maple.users.is_registered(context.message.author.id)
-        if not registered and context.command.name != "maplehelp":
-            asyncio.ensure_future(maplebot.reply("you ain't registered!!!"))
-        return registered
-    return commands.check(predicate)
-
-
 # ---- type converters ---- #
 
 
@@ -721,7 +703,7 @@ async def big_output_confirmation(context, output: str, max_len=1500, formatting
 
 
 @maplebot.command()
-@debug_command()
+@maple.req.debug(maplebot)
 async def updatecollection(target: str, card_id: str, amount: int = 1):
     target_record = maple.users.get_record(target)
     if not target_record:
@@ -768,7 +750,7 @@ async def register(context, nickname: str):
 
 
 @maplebot.command(pass_context=True, no_pm=True, aliases=['sendcard'])
-@requires_registration()
+@maple.req.registration(maplebot)
 async def givecard(context):
     user = context.message.author.id
     # format: !givecard clonepa Swamp 2
@@ -807,7 +789,7 @@ async def maplelinks(context):
 
 
 @maplebot.command(pass_context=True, aliases=['getcollection'])
-@requires_registration()
+@maple.req.registration(maplebot)
 async def exportcollection(context):
     await maplebot.type()
     exported_collection = export_collection_to_sideboard(context.message.author.id)
@@ -818,7 +800,7 @@ async def exportcollection(context):
 
 
 @maplebot.command(pass_context=True, aliases=['validatedeck', 'deckcheck'])
-@requires_registration()
+@maple.req.registration(maplebot)
 async def checkdeck(context):
     message = context.message
     deck = message.content[len(message.content.split()[0]):].strip()
@@ -837,7 +819,7 @@ async def checkdeck(context):
 
 
 @maplebot.command()
-@debug_command()
+@maple.req.debug(maplebot)
 async def draftadd(target, sets, deck):
     # await maplebot.type()
     deck = deck.strip()
@@ -899,14 +881,14 @@ async def packprice(context, card_set: str):
 
 
 @maplebot.command(pass_context=True, aliases=['maplebux', 'maplebalance'])
-@requires_registration()
+@maple.req.registration(maplebot)
 async def checkbux(context):
     await maplebot.reply("your maplebux balance is: ${0}"
                          .format('%.2f' % check_bux(context.message.author.id)))
 
 
 @maplebot.command(pass_context=True, aliases=['givemaplebux', 'sendbux'])
-@requires_registration()
+@maple.req.registration(maplebot)
 async def givebux(context, target: str, amount: float):
     amount = float('%.2f' % amount)
     myself = context.message.author.id
@@ -946,7 +928,7 @@ async def givebux(context, target: str, amount: float):
 
 
 @maplebot.command(pass_context=True, aliases=['openpack', 'obooster', 'opack'])
-@requires_registration()
+@maple.req.registration(maplebot)
 async def openbooster(context, card_set: to_upper, amount: int = 1):
     user = context.message.author.id
     await maplebot.type()
@@ -972,7 +954,7 @@ async def openbooster(context, card_set: to_upper, amount: int = 1):
 
 
 @maplebot.command(pass_context=True, aliases=['buypack'])
-@requires_registration()
+@maple.req.registration(maplebot)
 async def buybooster(context, card_set: to_upper, amount: int = 1):
     user = context.message.author.id
     if user in IN_TRANSACTION:
@@ -1012,7 +994,7 @@ async def buybooster(context, card_set: to_upper, amount: int = 1):
 
 
 @maplebot.command(pass_context=True)
-@requires_registration()
+@maple.req.registration(maplebot)
 async def recordmatch(context, winner, loser):
     winner_record = maple.users.get_record(winner)
     loser_record = maple.users.get_record(loser)
@@ -1047,7 +1029,7 @@ async def hash(context):
 
 
 @maplebot.command(pass_context=True)
-@requires_registration()
+@maple.req.registration(maplebot)
 async def changenick(context, nick):
     if not maple.users.verify_nick(nick):
         await maplebot.reply(("user with nickname {0} already exists. " +
@@ -1078,7 +1060,7 @@ async def userinfo(context, user=None):
 # ---- That Debug Shit ---- #
 
 @maplebot.command(pass_context=True)
-@debug_command()
+@maple.req.debug(maplebot)
 async def query(context):
     query = context.message.content.split(maxsplit=1)[1]
     conn = sqlite3.connect('maple.db')
@@ -1100,7 +1082,7 @@ async def query(context):
 
 
 @maplebot.command(pass_context=True)
-@debug_command()
+@maple.req.debug(maplebot)
 async def gutdump(context, table: str = "users", limit: int = 0):
     if table == "maple":
         with open(__file__) as file:
@@ -1116,52 +1098,16 @@ async def gutdump(context, table: str = "users", limit: int = 0):
 
 
 @maplebot.command()
-@debug_command()
+@maple.req.debug(maplebot)
 async def setupdb():
-    conn = sqlite3.connect('maple.db')
-    cursor = conn.cursor()
-    cursor.execute('''CREATE TABLE IF NOT EXISTS users
-                 (discord_id TEXT, name TEXT, elo_rating INTEGER, cash REAL)''')
-
-    cursor.execute('''CREATE TABLE IF NOT EXISTS match_history
-                 (winner TEXT, loser TEXT, winner_deckhash TEXT, loser_deckhash TEXT,
-                 FOREIGN KEY(winner) REFERENCES users(discord_id), FOREIGN KEY(loser) REFERENCES users(discord_id))''')
-
-    cursor.execute('''CREATE TABLE IF NOT EXISTS cards
-                 (multiverse_id INTEGER PRIMARY KEY, card_name TEXT, card_set TEXT, card_type TEXT, rarity TEXT, colors TEXT, cmc TEXT)''')
-
-    cursor.execute('''CREATE TABLE IF NOT EXISTS collection
-                 (owner_id TEXT, multiverse_id INTEGER, amount_owned INTEGER, date_obtained TIMESTAMP,
-                 FOREIGN KEY(owner_id) REFERENCES users(discord_id), FOREIGN KEY(multiverse_id) REFERENCES cards(multiverse_id),
-                 PRIMARY KEY (owner_id, multiverse_id))''')
-
-    cursor.execute('''CREATE TABLE IF NOT EXISTS booster_inventory
-                 (owner_id TEXT, card_set TEXT, seed INTEGER,
-                 FOREIGN KEY(owner_id) REFERENCES users(discord_id), FOREIGN KEY(card_set) REFERENCES set_map(code))''')
-
-    cursor.execute('''CREATE TABLE IF NOT EXISTS set_map
-                 (name TEXT, code TEXT, alt_code TEXT, PRIMARY KEY (code, alt_code))''')
-
-    cursor.execute('''CREATE TABLE IF NOT EXISTS timestamped_base64_strings
-                 (name TEXT PRIMARY KEY, b64str TEXT, timestamp REAL)''')
-
-    cursor.execute('''CREATE TRIGGER IF NOT EXISTS delete_from_collection_on_zero
-                   AFTER UPDATE OF amount_owned ON collection BEGIN
-                   DELETE FROM collection WHERE amount_owned < 1;
-                   END''')
-
-    cursor.execute('''CREATE TRIGGER IF NOT EXISTS update_date_obtained
-                   AFTER UPDATE OF amount_owned ON collection
-                   WHEN new.amount_owned > old.amount_owned BEGIN
-                   UPDATE collection SET date_obtained = CURRENT_TIMESTAMP WHERE rowid = new.rowid;
-                   END''')
-
-    conn.commit()
-    conn.close()
+    try:
+        maple.db.setup()
+    except Exception as exc:
+        await maplebot.reply('error setting up db: `{}`')
 
 
 @maplebot.command()
-@debug_command()
+@maple.req.debug(maplebot)
 async def populatesetinfo():
     # do not use load_mtgjson() here
     with open('AllSets.json', encoding="utf8") as f:
@@ -1186,7 +1132,7 @@ async def populatesetinfo():
 
 
 @maplebot.command()
-@debug_command()
+@maple.req.debug(maplebot)
 async def populatecardinfo():
     # maplebot will time out while waiting for this to finish, so you know be careful out there
     cardobj = load_mtgjson()
@@ -1204,13 +1150,13 @@ async def populatecardinfo():
 
 
 @maplebot.command()
-@debug_command()
+@maple.req.debug(maplebot)
 async def loadsetjson(cardset):
     load_set_json(cardset)
 
 
 @maplebot.command(pass_context=True, aliases=["givepack"])
-@debug_command()
+@maple.req.debug(maplebot)
 async def givebooster(context, card_set, target=None, amount: int = 1):
     card_set = card_set.upper()
     if not target:
@@ -1226,7 +1172,7 @@ async def givebooster(context, card_set, target=None, amount: int = 1):
 
 
 @maplebot.command(aliases=["adjustbux"])
-@debug_command()
+@maple.req.debug(maplebot)
 async def changebux(target, amount: float):
     maple.users.adjust_cash(target, amount)
     await maplebot.reply("updated bux")
@@ -1312,7 +1258,7 @@ async def on_message(message):
 if __name__ == "__main__":
     os.environ['COLOREDLOGS_LOG_FORMAT'] = "%(asctime)s %(name)s %(levelname)s %(message)s"
     coloredlogs.install(level='INFO')
-    start_cogs = ['maple.mtg.cardinfo']
+    start_cogs = ['maple.mtg.scryfall']
     for cog in start_cogs:
         try:
             maplebot.load_extension(cog)
