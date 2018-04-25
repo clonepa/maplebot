@@ -19,7 +19,10 @@ import bottalk
 import deckhash
 import mapleconfig
 
+import maple
+
 import blackjack
+
 
 TOKEN = mapleconfig.get_token()
 MTGOX_CHANNEL_ID = mapleconfig.get_mainchannel_id()
@@ -50,7 +53,7 @@ except FileNotFoundError:
     RARITY_CACHE = collections.defaultdict(str)
 
 
-maplebot = commands.Bot(command_prefix='!', description='maple the magic cat', help_attrs={"name": "maplehelp"})
+maplebot = commands.Bot(command_prefix='!', description='maple the gamification cat', help_attrs={"name": "maplehelp"})
 
 # ---- decorators for commands ---- #
 
@@ -78,7 +81,7 @@ def debug_command():
 
 def requires_registration():
     def predicate(context):
-        registered = is_registered(context.message.author.id)
+        registered = maple.users.is_registered(context.message.author.id)
         if not registered and context.command.name != "maplehelp":
             asyncio.ensure_future(maplebot.reply("you ain't registered!!!"))
         return registered
@@ -100,7 +103,8 @@ def to_lower(argument):
 
 
 def update_user_collection(user, multiverse_id, amount=1, conn=None):
-    '''Updates the entry on table `collection` for card of multiverse id arg(multiverse_id) owned by arg(user) (discord_id string).
+    '''Updates the entry on table `collection` for card of multiverse id arg(multiverse_id),
+    owned by arg(user) (discord_id string).
     If no entry and arg(amount) is positive, creates entry with amount_owned = arg(amount).
     If entry already exists, changes its amount_owned by arg(amount), down to zero.
     Allows for passing an existing sqlite3 connection to arg(conn) for mass card updatings.
@@ -131,7 +135,8 @@ def update_user_collection(user, multiverse_id, amount=1, conn=None):
                        {"name": user,
                         "mvid": multiverse_id,
                         "amount": amount})
-    # at this point we know the user already has some of the card, so update the amount_owned, increasing it or decreasing it
+    # at this point we know the user already has some of the card,
+    # so update the amount_owned, increasing it or decreasing it
     else:
         amount_owned = has_already[0]
         # select the real amount to change
@@ -141,7 +146,8 @@ def update_user_collection(user, multiverse_id, amount=1, conn=None):
             amount_to_change = -amount_owned if (-amount > amount_owned) else amount
         else:
             amount_to_change = amount
-        cursor.execute("UPDATE collection SET amount_owned = amount_owned + :amount WHERE owner_id=:name AND multiverse_id=:mvid",
+        cursor.execute('''UPDATE collection SET amount_owned = amount_owned + :amount
+                       WHERE owner_id=:name AND multiverse_id=:mvid''',
                        {"name": user,
                         "mvid": multiverse_id,
                         "amount": amount_to_change})
@@ -231,17 +237,6 @@ def get_booster_price(card_set):
     if div_match:
         return float(div_match.group(1))
     return 3.25
-
-
-def verify_nick(nick):
-    '''returns True if nick doesn't exist in db, False if it does'''
-    conn = sqlite3.connect('maple.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE name = :name COLLATE NOCASE",
-                   {"name": nick})
-    result = cursor.fetchone()
-    conn.close()
-    return False if result else True
 
 
 def calc_elo_change(winner, loser):
@@ -386,7 +381,7 @@ def give_homie_some_lands(who):
     '''give 60 lands to new user'''
     conn = sqlite3.connect('maple.db')
     cursor = conn.cursor()
-    user_record = get_user_record(who)
+    user_record = maple.users.get_record(who)
     mvid = [439857, 439859, 439856, 439858, 439860]
     for i in mvid:
         cursor.execute("INSERT OR IGNORE INTO collection VALUES (:name,:mvid,60,CURRENT_TIMESTAMP)",
@@ -405,27 +400,17 @@ def give_booster(owner, card_set, amount=1):
     cursor.execute("SELECT card_set FROM cards WHERE card_set LIKE :cardset", {"cardset": card_set})
     if not (card_set in cardobj):
         raise KeyError
-    owner_id = get_user_record(owner, 'discord_id')
+    owner_id = maple.users.get_record(owner, 'discord_id')
     for i in range(amount):
         random.seed()
         booster_seed = random.getrandbits(32)
-        cursor.execute("INSERT INTO booster_inventory VALUES (:owner, :cset, :seed)", {"owner": owner_id, "cset": card_set, "seed": booster_seed})
+        cursor.execute("INSERT INTO booster_inventory VALUES (:owner, :cset, :seed)",
+                       {"owner": owner_id, "cset": card_set, "seed": booster_seed})
     conn.commit()
     conn.close()
     if outmessage == "":
         outmessage = "booster added to inventory!"
     return outmessage
-
-
-def adjustbux(who, how_much):
-    conn = sqlite3.connect('maple.db')
-    cursor = conn.cursor()
-    cursor.execute("UPDATE users SET cash = cash + :how_much WHERE discord_id=:who OR name=:who",
-                   {"how_much": '%.2f' % how_much, "who": who})
-    rowcount = cursor.rowcount
-    conn.commit()
-    conn.close()
-    return True if rowcount else False
 
 
 def open_booster(owner, card_set, amount):
@@ -436,7 +421,8 @@ def open_booster(owner, card_set, amount):
         cursor.execute("SELECT *, rowid FROM booster_inventory WHERE owner_id=:name AND card_set LIKE :set",
                        {"name": owner, "set": card_set})
     else:
-        cursor.execute("SELECT *, rowid FROM booster_inventory WHERE owner_id=:name AND card_set LIKE :set LIMIT :amount",
+        cursor.execute('''SELECT *, rowid FROM booster_inventory
+                       WHERE owner_id=:name AND card_set LIKE :set LIMIT :amount''',
                        {"name": owner, "set": card_set, "amount": amount})
     boosters = cursor.fetchall()
     if not boosters:
@@ -455,9 +441,11 @@ def open_booster(owner, card_set, amount):
                            {"name": owner, "mvid": card[0]})
             cr = cursor.fetchone()
             if not cr:
-                cursor.execute("INSERT INTO collection VALUES (:name,:mvid,1,CURRENT_TIMESTAMP)", {"name": owner, "mvid": card[0]})
+                cursor.execute("INSERT INTO collection VALUES (:name,:mvid,1,CURRENT_TIMESTAMP)",
+                               {"name": owner, "mvid": card[0]})
             else:
-                cursor.execute("UPDATE collection SET amount_owned = amount_owned + 1 WHERE owner_id=:name AND multiverse_id=:mvid",
+                cursor.execute('''UPDATE collection SET amount_owned = amount_owned + 1
+                               WHERE owner_id=:name AND multiverse_id=:mvid''',
                                {"name": owner, "mvid": card[0]})
             outstring += "{name} -- {rarity}\n".format(name=card[1], rarity=card[2])
 
@@ -569,7 +557,7 @@ def export_collection_to_sideboard(user):
 
 
 def export_collection_to_list(user):
-    who = get_user_record(user)
+    who = maple.users.get_record(user)
     conn = sqlite3.connect('maple.db')
     cursor = conn.cursor()
     cursor.execute('''SELECT amount_owned, card_name, card_set, card_type, rarity,
@@ -583,45 +571,6 @@ def export_collection_to_list(user):
                     "rarity": card[4], "multiverseid": card[5], "color": card[6], "cmc": card[7], "date": card[8]})
     conn.close()
     return out
-
-
-def is_registered(discord_id):
-    conn = sqlite3.connect('maple.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT discord_id FROM users WHERE discord_id=:id", {"id": discord_id})
-    r = cursor.fetchone()
-    conn.close()
-    if r:
-        return True
-    else:
-        return False
-
-
-def get_user_record(who, field=None):
-    conn = sqlite3.connect('maple.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE discord_id=:who OR name=:who COLLATE NOCASE",
-                   {"who": who})
-    columns = [description[0] for description in cursor.description]
-    r = cursor.fetchone()
-    conn.close()
-    if not r:
-        raise KeyError
-
-    out_dict = collections.OrderedDict.fromkeys(columns)
-    for i, key in enumerate(out_dict):
-        out_dict[key] = r[i]
-
-    return out_dict[field] if field else out_dict
-
-
-def update_elo(who, elo):
-    conn = sqlite3.connect('maple.db')
-    cursor = conn.cursor()
-    cursor.execute("UPDATE users SET elo_rating =:elo WHERE discord_id=:who OR name=:who",
-                   {"elo": elo, "who": who})
-    conn.commit()
-    conn.close()
 
 
 def give_card(user, target, card, amount):
@@ -774,7 +723,7 @@ async def big_output_confirmation(context, output: str, max_len=1500, formatting
 @maplebot.command()
 @debug_command()
 async def updatecollection(target: str, card_id: str, amount: int = 1):
-    target_record = get_user_record(target)
+    target_record = maple.users.get_record(target)
     if not target_record:
         return await maplebot.reply("invalid user")
     conn = sqlite3.connect('maple.db')
@@ -790,7 +739,8 @@ async def updatecollection(target: str, card_id: str, amount: int = 1):
     target_name = target_record['name']
     if not updated:
         return await maplebot.reply("no changes made to cards `{0}` owned by {1}.".format(card_name, target_name))
-    return await maplebot.reply("changed amount of cards `{0}` owned by {1} by {2}.".format(card_name, target_name, updated))
+    return await maplebot.reply("changed amount of cards `{0}` owned by {1} by {2}."
+                                .format(card_name, target_name, updated))
 
 
 @maplebot.command(pass_context=True, no_pm=True, aliases=['mapleregister'])
@@ -802,7 +752,7 @@ async def register(context, nickname: str):
     if cursor.fetchall():
         await maplebot.reply("user with discord ID {0} already exists. don't try to pull a fast one on old maple!!"
                              .format(user))
-    elif not verify_nick(nickname):
+    elif not maple.users.verify_nick(nickname):
         await maplebot.reply("user with nickname {0} already exists. don't try to confuse old maple you hear!!"
                              .format(nickname))
     else:
@@ -850,7 +800,7 @@ async def givecard(context):
 
 @maplebot.command(pass_context=True, aliases=['mtglinks'])
 async def maplelinks(context):
-    username = get_user_record(context.message.author.id, 'name')
+    username = maple.users.get_record(context.message.author.id, 'name')
     await maplebot.reply(("\nCollection: http://qubeley.biz/mtg/collection/{0}" +
                           "\nDeckbuilder: http://qubeley.biz/mtg/deckbuilder/{0}"
                           ).format(username))
@@ -899,7 +849,7 @@ async def draftadd(target, sets, deck):
     conn = sqlite3.connect('maple.db')
     cursor = conn.cursor()
 
-    target_id = get_user_record(target, 'discord_id')
+    target_id = maple.users.get_record(target, 'discord_id')
 
     ids_to_add = []
 
@@ -988,7 +938,7 @@ async def givebux(context, target: str, amount: float):
     if mycash == 0 or mycash - amount < 0:
         await maplebot.reply("not enough bux to ride this trux :surfer:")
         return
-    sent, received = adjustbux(myself, -amount), adjustbux(otherperson, amount)
+    sent, received = maple.users.adjust_cash(myself, -amount), maple.users.adjust_cash(otherperson, amount)
     if sent is received is True:
         await maplebot.reply("sent ${0} to {1}"
                              .format(amount, target))
@@ -1004,7 +954,8 @@ async def openbooster(context, card_set: to_upper, amount: int = 1):
     boosters_list = open_booster(user, card_set, amount)
     boosters_opened = len(boosters_list)
     if boosters_opened == 1:
-        await maplebot.reply("\n```{0}```\nhttp://qubeley.biz/mtg/booster/{1}/{2}".format(boosters_list[0]['cards'], card_set, boosters_list[0]['seed']))
+        await maplebot.reply("\n```{0}```\nhttp://qubeley.biz/mtg/booster/{1}/{2}"
+                             .format(boosters_list[0]['cards'], card_set, boosters_list[0]['seed']))
     elif boosters_opened > 1:
         outstring = "{0} opened {1} boosters by {2}:\n\n".format(boosters_opened,
                                                                  card_set,
@@ -1049,7 +1000,7 @@ async def buybooster(context, card_set: to_upper, amount: int = 1):
     if not msg:
         return
     if (msg.content.startswith('y') or msg.content.startswith('Y')):
-        adjustbux(user, float(price) * -1)
+        maple.users.adjust_cash(user, float(price) * -1)
         result = give_booster(user, card_set, amount)
     elif (msg.content.startswith('n') or msg.content.startswith('N')):
         result = "well ok"
@@ -1063,27 +1014,27 @@ async def buybooster(context, card_set: to_upper, amount: int = 1):
 @maplebot.command(pass_context=True)
 @requires_registration()
 async def recordmatch(context, winner, loser):
-    winner_record = get_user_record(winner)
-    loser_record = get_user_record(loser)
+    winner_record = maple.users.get_record(winner)
+    loser_record = maple.users.get_record(loser)
     winner_elo = winner_record['elo_rating']
     loser_elo = loser_record['elo_rating']
-    new_elo = calc_elo_change(winner_elo, loser_elo)
-    bux_adjustment = 3.00 * (new_elo[0] - winner_elo) / 32
+    new_winner_elo, new_loser_elo = calc_elo_change(winner_elo, loser_elo)
+    bux_adjustment = 3.00 * (new_winner_elo - winner_elo) / 32
     bux_adjustment = round(bux_adjustment, 2)
     loser_bux_adjustment = round(bux_adjustment / 3, 2)
 
     winnerid, loserid = winner_record['discord_id'], loser_record['discord_id']
 
-    update_elo(winnerid, new_elo[0])
-    update_elo(loserid, new_elo[1])
+    maple.users.set_record(winnerid, 'elo_rating', new_winner_elo)
+    maple.users.set_record(loserid, 'elo_rating', new_loser_elo)
 
-    adjustbux(winnerid, bux_adjustment)
-    adjustbux(loserid, bux_adjustment / 3)
+    maple.users.adjust_cash(winnerid, bux_adjustment)
+    maple.users.adjust_cash(loserid, bux_adjustment / 3)
     await maplebot.reply("{0} new elo: {1}\n{2} new elo: {3}\n{0} payout: ${4}\n{2} payout: ${5}"
                          .format(winner_record['name'],
-                                 new_elo[0],
+                                 new_winner_elo,
                                  loser_record['name'],
-                                 new_elo[1],
+                                 new_loser_elo,
                                  bux_adjustment,
                                  loser_bux_adjustment))
 
@@ -1098,7 +1049,7 @@ async def hash(context):
 @maplebot.command(pass_context=True)
 @requires_registration()
 async def changenick(context, nick):
-    if not verify_nick(nick):
+    if not maple.users.verify_nick(nick):
         await maplebot.reply(("user with nickname {0} already exists. " +
                               "don't try to confuse old maple you hear!!").format(nick))
     else:
@@ -1114,7 +1065,7 @@ async def changenick(context, nick):
 @maplebot.command(pass_context=True)
 async def userinfo(context, user=None):
     user = user if user else context.message.author.id
-    record = get_user_record(user)
+    record = maple.users.get_record(user)
     outstring = ('*nickname*: {name}' +
                  '\n*discord id*: {discord_id}' +
                  '\n*elo rating*: {elo_rating}' +
@@ -1269,7 +1220,7 @@ async def givebooster(context, card_set, target=None, amount: int = 1):
         give_booster(target, card_set, amount)
     except KeyError:
         return await maplebot.reply("{0} is not a valid set!!".format(card_set))
-    target_id = get_user_record(target, 'discord_id')
+    target_id = maple.users.get_record(target, 'discord_id')
     await maplebot.reply("{0} {1} booster(s) added to <@{2}>'s inventory!"
                          .format(amount, card_set, target_id))
 
@@ -1277,13 +1228,15 @@ async def givebooster(context, card_set, target=None, amount: int = 1):
 @maplebot.command(aliases=["adjustbux"])
 @debug_command()
 async def changebux(target, amount: float):
-    adjustbux(target, amount)
+    maple.users.adjust_cash(target, amount)
     await maplebot.reply("updated bux")
+
 
 @maplebot.command()
 async def mapletest():
     await maplebot.say("i'm {0} and my guts are made of python {1}, brah :surfer:"
                        .format(maplebot.user.name, sys.version.split()[0]))
+
 
 @maplebot.command()
 async def blackjacktest():
@@ -1361,7 +1314,8 @@ async def cardsearch(context):
         reply_string += '\n**{name}** ({set}): {mana_cost} {type_line}'.format(name=card['name'],
                                                                                set=card['set'].upper(),
                                                                                mana_cost=card['mana_cost'],
-                                                                               type_line=card['type_line'] if 'type_line' in card else '?')
+                                                                               type_line=card['type_line'] if
+                                                                               'type_line' in card else '?')
     await maplebot.reply(reply_string)
 
 
@@ -1369,7 +1323,7 @@ async def cardsearch(context):
 async def hascard(context, target, card):
     card = context.message.content.split(maxsplit=2)[2]
     cursor = sqlite3.connect('maple.db').cursor()
-    target_record = get_user_record(target)
+    target_record = maple.users.get_record(target)
     if not target_record:
         return await maplebot.reply("user {0} doesn't exist!".format(target))
     cursor.execute('''SELECT cards.card_name, users.name, SUM(collection.amount_owned) FROM collection
