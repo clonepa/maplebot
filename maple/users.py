@@ -1,5 +1,5 @@
 import collections
-from maple import db
+from . import db
 
 
 @db.operation

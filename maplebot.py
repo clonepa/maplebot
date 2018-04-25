@@ -1248,77 +1248,6 @@ async def blackjacktest():
     await maplebot.say(outstring + "\nHand Score: " + str(score))
 
 
-@maplebot.command(pass_context=True, aliases=["maplecard", "maplecardinfo"])
-async def cardinfo(context):
-    message = context.message
-    query = message.content.split(maxsplit=1)
-    if len(query) == 1:
-        return None
-    else:
-        query = query[1]
-    await maplebot.type()
-    search_results = search_card(query)
-    if not search_results:
-        await maplebot.reply('No results found for *"{0}"*'.format(query))
-        return
-    card = search_results['data'][0]
-    total_found = search_results['total_cards']
-    if total_found > 1:
-        more_string = '\n*{0} other cards matching that query were found.*'.format(total_found - 1)
-    else:
-        more_string = ''
-    all_printings = search_card('!"{0}" unique:prints'.format(card['name']))['data']
-    other_printings = []
-    for printing in all_printings:
-        if printing['set'] == card['set'] or printing['set'] in other_printings:
-            continue
-        other_printings.append(printing['set'].upper())
-    printings_list_string = ', '.join(other_printings[:8]) + \
-                            (' and {0} others'.format(len(other_printings) - 8) if len(other_printings) > 8 else '')
-    printings_string = 'Also printed in: {0}'.format(printings_list_string) if other_printings else ''
-    multiverse_id = card['multiverse_ids'][0] if card['multiverse_ids'] else None
-    if multiverse_id:
-        gatherer_string = 'http://gatherer.wizards.com/Pages/Card/Details.aspx?multiverseid={0}'.format(multiverse_id)
-    else:
-        gatherer_string = "this card has no gatherer page. must be something weird or pretty new...!"
-    reply_string = [more_string,
-                    '**{card_name}**',
-                    'Set: {card_set}',
-                    printings_string,
-                    gatherer_string,
-                    card['image_uris']['large'] if 'image_uris' in card
-                    else card['card_faces'][0]['image_uris']['large']]
-    reply_string = '\n'.join(reply_string).format(card_name=card['name'],
-                                                  card_set=card['set'].upper())
-    await maplebot.reply(reply_string)
-
-
-@maplebot.command(pass_context=True, aliases=["maplecardsearch", "maplesearch"])
-async def cardsearch(context):
-    query = context.message.content.split(maxsplit=1)
-    if len(query) == 1:
-        return None
-    else:
-        query = query[1]
-    await maplebot.type()
-    response = search_card(query)
-    if not response:
-        await maplebot.reply('No results found for *"{0}"*'.format(query))
-        return
-    search_results = response['data']
-    reply_string = 'Cards found:'
-    for i, card in enumerate(search_results):
-        if i > 10:
-            reply_string += '\nand {0} more'.format(response['total_cards'] - 10)
-            break
-        reply_string += '\n**{name}** ({set}): {mana_cost} {type_line}'.format(name=card['name'],
-                                                                               set=card['set'].upper(),
-                                                                               mana_cost=card['mana_cost'],
-                                                                               type_line=card['type_line'] if
-                                                                               'type_line' in card else '?')
-    await maplebot.reply(reply_string)
-
-
 @maplebot.command(pass_context=True)
 async def hascard(context, target, card):
     card = context.message.content.split(maxsplit=2)[2]
@@ -1383,6 +1312,14 @@ async def on_message(message):
 if __name__ == "__main__":
     os.environ['COLOREDLOGS_LOG_FORMAT'] = "%(asctime)s %(name)s %(levelname)s %(message)s"
     coloredlogs.install(level='INFO')
+    start_cogs = ['maple.mtg.cardinfo']
+    for cog in start_cogs:
+        try:
+            maplebot.load_extension(cog)
+            print('loaded extension {}'.format(cog))
+        except Exception as e:
+            exc = '{}: {}'.format(type(e).__name__, e)
+            print('Failed to load extension {}\n{}'.format(cog, exc))
     commands = list(maplebot.commands.keys())[:]
     for command in commands:
         poopese(maplebot.commands[command])
