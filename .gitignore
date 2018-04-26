@@ -4,3 +4,5 @@ maple.db
 __pycache__/
 rarity_cache.json
 mapletoken.py
+json_patches/*
+maple/mtg/json_patches/*
