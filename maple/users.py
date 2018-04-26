@@ -63,26 +63,6 @@ class UserManagement():
     def __init__(self, bot):
         self.bot = bot
 
-    # @commands.command(pass_context=True, no_pm=True, aliases=['mapleregister'])
-    # @db.operation
-    # async def register(self, context, nickname: str, conn=None, cursor=None):
-    #     user = context.message.author.id
-    #     cursor.execute('SELECT * FROM users WHERE discord_id=?', (user))
-    #     if cursor.fetchall():
-    #         await self.bot.reply("user with discord ID {0} already exists. don't try to pull a fast one on old maple!!"
-    #                              .format(user))
-    #     elif not verify_nick(nickname):
-    #         await self.bot.reply("user with nickname {0} already exists. don't try to confuse old maple you hear!!"
-    #                              .format(nickname))
-    #     else:
-    #         cursor.execute("INSERT INTO users VALUES (?,?,1500,50.00)", (user, nickname))
-    #         conn.commit()
-    #         # mtg.collection.give_homie_some_lands(user)
-    #         # mtg.booster.give_booster(user, "M13", 15)
-    #         await self.bot.reply('created user in database with ID {0} and nickname {1}!\n'.format(user, nickname) +
-    #                              'i gave homie 60 of each Basic Land and 15 Magic 2013 Booster Packs!!')
-    #     return
-
     @commands.command(pass_context=True, aliases=['givemaplebux', 'sendbux'])
     @req.registration
     @db.operation_async
