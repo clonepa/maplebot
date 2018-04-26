@@ -1,10 +1,6 @@
 import mapleconfig
 from . import db
 
-import asyncio
-
-from discord.ext import commands
-
 DEBUG_WHITELIST = mapleconfig.get_debug_whitelist()
 
 
@@ -18,19 +14,31 @@ def is_registered(discord_id, conn=None, cursor=None):
         return False
 
 
-def debug(bot):
+def debug(func):
 
-    def predicate(context):
+    async def wrapped(self, context, *args, **kwargs):
         is_debugger = context.message.author.id in DEBUG_WHITELIST
-        asyncio.ensure_future(bot.reply("that's a debug command, you rascal!"))
-        return is_debugger
-    return commands.check(predicate)
+        if not is_debugger:
+            await self.bot.reply("that's a debug command, you rascal!")
+            return
+        else:
+            await func(self, context, *args, **kwargs)
+            return await func(self, context, *args, **kwargs)
+
+    wrapped.__name__ = func.__name__
+    return wrapped
 
 
-def registration(bot):
+def registration(func):
 
-    def predicate(context):
+    async def wrapped(self, context, *args, **kwargs):
         registered = is_registered(context.message.author.id)
-        asyncio.ensure_future(bot.reply("you ain't registered!!!"))
-        return registered
-    return commands.check(predicate)
+        if not registered:
+            await self.bot.reply("you ain't registered!!")
+            return
+        else:
+            await func(self, context, *args, **kwargs)
+            return await func(self, context, *args, **kwargs)
+
+    wrapped.__name__ = func.__name__
+    return wrapped

@@ -23,30 +23,9 @@ DEBUG_WHITELIST = mapleconfig.get_debug_whitelist()
 logger = logging.getLogger('maplebot')
 
 
-maplebot = commands.maplebot(command_prefix='!',
+maplebot = commands.Bot(command_prefix='!',
                              description='maple the gamification cat',
                              help_attrs={"name": "maplehelp"})
-
-
-def debug():
-
-    def predicate(context):
-        is_debugger = context.message.author.id in DEBUG_WHITELIST
-        if not is_debugger and context.command.name != "maplehelp" and maplebot:
-            asyncio.ensure_future(maplebot.reply("that's a debug command, you rascal!"))
-        return is_debugger
-    return commands.check(predicate)
-
-
-def registration():
-
-    def predicate(context):
-        registered = maple.users.is_registered(context.message.author.id)
-        if not registered and context.command.name != "maplehelp":
-                asyncio.ensure_future(maplebot.reply("you ain't registered!!!"))
-        return registered
-    return commands.check(predicate)
-
 
 
 # ------------------- COMMANDS ------------------- #
@@ -63,7 +42,7 @@ async def hash(context):
 
 
 @maplebot.command()
-@maple.req.debug()
+@maple.req.debug
 async def populatesetinfo():
     # do not use load_mtgjson() here
     with open('AllSets.json', encoding="utf8") as f:

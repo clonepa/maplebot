@@ -84,7 +84,7 @@ class UserManagement():
     #     return
 
     @commands.command(pass_context=True, aliases=['givemaplebux', 'sendbux'])
-    @req.registration()
+    @req.registration
     @db.operation_async
     async def givebux(self, context, target: str, amount: float, conn=None, cursor=None):
         amount = float('%.2f' % amount)
@@ -121,13 +121,13 @@ class UserManagement():
                                  .format(amount, target))
 
     @commands.command(pass_context=True, aliases=['maplebux', 'maplebalance'])
-    @req.registration()
+    @req.registration
     async def checkbux(self, context):
         await self.bot.reply("your maplebux balance is: ${0}"
                              .format('%.2f' % get_record(context.message.author.id, 'cash')))
 
     @commands.command(pass_context=True)
-    @req.registration()
+    @req.registration
     async def recordmatch(self, context, winner, loser):
         winner_record = get_record(winner)
         loser_record = get_record(loser)
@@ -154,7 +154,7 @@ class UserManagement():
                                      loser_bux_adjustment))
 
     @commands.command(pass_context=True)
-    @req.registration()
+    @req.registration
     @db.operation_async
     async def changenick(self, context, nick, conn=None, cursor=None):
         if not verify_nick(nick):

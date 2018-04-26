@@ -274,7 +274,7 @@ class MTGBoosters():
         await self.bot.reply(out)
 
     @commands.command(pass_context=True, aliases=['buypack'])
-    @req.registration(args[0])
+    @req.registration
     async def buybooster(self, context, card_set: util.to_upper, amount: int = 1):
         '''purchase any amount of booster packs of set'''
         user = context.message.author.id
@@ -315,7 +315,7 @@ class MTGBoosters():
         IN_TRANSACTION.remove(user)
 
     @commands.command(pass_context=True, aliases=['openpack', 'obooster', 'opack'])
-    @req.registration()
+    @req.registration
     async def openbooster(self, context, card_set: util.to_upper, amount: int = 1):
         '''open amount of owned boosters of set'''
         user = context.message.author.id
@@ -341,7 +341,7 @@ class MTGBoosters():
                                  .format(user))
 
     @commands.command(pass_context=True, aliases=["givepack"])
-    @req.debug()
+    @req.debug
     async def givebooster(self, context, card_set, target=None, amount: int = 1):
         card_set = card_set.upper()
         if not target:

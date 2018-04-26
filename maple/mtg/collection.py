@@ -203,7 +203,7 @@ class MTGCollection():
         self.bot = bot
 
     @commands.command()
-    @req.debug()
+    @req.debug
     @db.operation_async
     async def updatecollection(self, target: str, card_id: str, amount: int = 1, conn=None, cursor=None):
         target_record = users.get_record(target)
@@ -222,7 +222,7 @@ class MTGCollection():
                                     .format(card_name, target_name, updated))
 
     @commands.command(pass_context=True, no_pm=True, aliases=['sendcard'])
-    @req.registration()
+    @req.registration
     async def givecard(self, context):
         user = context.message.author.id
         # format: !givecard clonepa Swamp 2
@@ -252,7 +252,7 @@ class MTGCollection():
         await self.bot.reply(reply_dict[result_dict['code']])
 
     @commands.command(pass_context=True, aliases=['validatedeck', 'deckcheck'])
-    @req.registration()
+    @req.registration
     async def checkdeck(self, context):
         message = context.message
         deck = message.content[len(message.content.split()[0]):].strip()
@@ -270,7 +270,7 @@ class MTGCollection():
                                         .format(message.author.id, hashed_deck))
 
     @commands.command(pass_context=True, aliases=['mtglinks'])
-    @req.registration()
+    @req.registration
     async def maplelinks(self, context):
         username = users.get_record(context.message.author.id, 'name')
         await self.bot.reply(("\nCollection: http://qubeley.biz/mtg/collection/{0}" +
@@ -278,7 +278,7 @@ class MTGCollection():
                               ).format(username))
 
     @commands.command()
-    @req.debug()
+    @req.debug
     @db.operation_async
     async def draftadd(self, target, sets, deck, conn=None, cursor=None):
         await self.bot.type()

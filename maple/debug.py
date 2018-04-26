@@ -15,7 +15,7 @@ class Debug():
                            .format(self.bot.user.name, sys.version.split()[0]))
 
     @commands.command()
-    @req.debug()
+    @req.debug
     async def setupdb(self):
         try:
             db.setup()
@@ -23,7 +23,7 @@ class Debug():
             await self.bot.reply('error setting up db: `{}`'.format(exc))
 
     @commands.command(pass_context=True)
-    @req.debug()
+    @req.debug
     @db.operation_async
     async def query(self, context, *, conn=None, cursor=None):
         query = context.message.content.split(maxsplit=1)[1]
@@ -42,7 +42,7 @@ class Debug():
         conn.commit()
 
     @commands.command(pass_context=True)
-    @req.debug()
+    @req.debug
     async def gutdump(self, context, *, table: str = "users", limit: int = 0):
         if table == "maple":
             with open(__file__) as file:
@@ -57,7 +57,7 @@ class Debug():
         await util.big_output_confirmation(context, output, formatting=util.codeblock)
 
     @commands.command(aliases=["adjustbux"])
-    @req.debug()
+    @req.debug
     async def changebux(self, target, amount: float):
         users.adjust_cash(target, amount)
         await self.bot.reply("updated bux")
