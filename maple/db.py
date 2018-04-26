@@ -1,6 +1,5 @@
 import sqlite3
 
-
 DB_NAME = 'maple.db'
 
 
@@ -20,8 +19,25 @@ def operation(func):
     return wrapped
 
 
+def operation_async(func):
+    '''Decorator for functions that access the maple database'''
+    async def wrapped(*args, conn=None, **kwargs):
+        if not conn:
+            conn = sqlite3.connect(DB_NAME)
+            self_conn = True
+        else:
+            self_conn = False
+        cursor = conn.cursor()
+        return_value = func(*args, **kwargs, conn=conn, cursor=cursor)
+        if self_conn:
+            conn.close()
+        return return_value
+    wrapped.__name__ = func.__name__
+    return wrapped
+
+
 @operation
-def setupdb(conn=None, cursor=None):
+def setup(conn=None, cursor=None):
     cursor.execute('''CREATE TABLE IF NOT EXISTS users
                  (discord_id TEXT, name TEXT, elo_rating INTEGER, cash REAL)''')
 
@@ -37,7 +53,7 @@ def setupdb(conn=None, cursor=None):
                  (owner_id TEXT, multiverse_id INTEGER, amount_owned INTEGER, date_obtained TIMESTAMP,
                  FOREIGN KEY(owner_id) REFERENCES users(discord_id),
                  FOREIGN KEY(multiverse_id) REFERENCES cards(multiverse_id),
-                 PRIMARY KEY (owner_id, multiverse_id))''')
+                 PRIMARY KEY(owner_id, multiverse_id))''')
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS booster_inventory
                  (owner_id TEXT, card_set TEXT, seed INTEGER,

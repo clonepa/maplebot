@@ -1,15 +1,11 @@
 import collections
-from . import db
 
 
-@db.operation
-def is_registered(discord_id, conn=None, cursor=None):
-    cursor.execute("SELECT discord_id FROM users WHERE discord_id=:id", {"id": discord_id})
-    r = cursor.fetchone()
-    if r:
-        return True
-    else:
-        return False
+from . import db, req, util
+# import mtg.collection
+# import mtg.booster
+
+from discord.ext import commands
 
 
 @db.operation
@@ -61,3 +57,128 @@ def adjust_cash(target, delta: float):
     print(new_bux)
     response = set_record(target_record['discord_id'], 'cash', new_bux)
     return True if response == new_bux else False
+
+
+class UserManagement():
+    def __init__(self, bot):
+        self.bot = bot
+
+    # @commands.command(pass_context=True, no_pm=True, aliases=['mapleregister'])
+    # @db.operation
+    # async def register(self, context, nickname: str, conn=None, cursor=None):
+    #     user = context.message.author.id
+    #     cursor.execute('SELECT * FROM users WHERE discord_id=?', (user))
+    #     if cursor.fetchall():
+    #         await self.bot.reply("user with discord ID {0} already exists. don't try to pull a fast one on old maple!!"
+    #                              .format(user))
+    #     elif not verify_nick(nickname):
+    #         await self.bot.reply("user with nickname {0} already exists. don't try to confuse old maple you hear!!"
+    #                              .format(nickname))
+    #     else:
+    #         cursor.execute("INSERT INTO users VALUES (?,?,1500,50.00)", (user, nickname))
+    #         conn.commit()
+    #         # mtg.collection.give_homie_some_lands(user)
+    #         # mtg.booster.give_booster(user, "M13", 15)
+    #         await self.bot.reply('created user in database with ID {0} and nickname {1}!\n'.format(user, nickname) +
+    #                              'i gave homie 60 of each Basic Land and 15 Magic 2013 Booster Packs!!')
+    #     return
+
+    @commands.command(pass_context=True, aliases=['givemaplebux', 'sendbux'])
+    @req.registration()
+    @db.operation_async
+    async def givebux(self, context, target: str, amount: float, conn=None, cursor=None):
+        amount = float('%.2f' % amount)
+        my_id = context.message.author.id
+        mycash = get_record(my_id, 'cash')
+        otherperson = ""
+        cursor.execute("SELECT name FROM users WHERE discord_id=:who OR name=:who COLLATE NOCASE",
+                       {"who": target})
+        result = cursor.fetchone()
+        if result:
+            otherperson = result[0]
+        else:
+            await self.bot.reply("I'm not sure who you're trying to give money to...")
+            return
+
+        cursor.execute("SELECT name FROM users WHERE discord_id=:who OR name=:who",
+                       {"who": my_id})
+
+        result = cursor.fetchone()
+        if result:
+            if result[0] == otherperson:
+                await self.bot.reply("sending money to yourself... that's shady...")
+                return
+
+        if amount < 0:
+            await self.bot.reply("wait a minute that's a robbery!")
+            return
+        if mycash == 0 or mycash - amount < 0:
+            await self.bot.reply("not enough bux to ride this trux :surfer:")
+            return
+        sent, received = adjust_cash(my_id, -amount), adjust_cash(otherperson, amount)
+        if sent is received is True:
+            await self.bot.reply("sent ${0} to {1}"
+                                 .format(amount, target))
+
+    @commands.command(pass_context=True, aliases=['maplebux', 'maplebalance'])
+    @req.registration()
+    async def checkbux(self, context):
+        await self.bot.reply("your maplebux balance is: ${0}"
+                             .format('%.2f' % get_record(context.message.author.id, 'cash')))
+
+    @commands.command(pass_context=True)
+    @req.registration()
+    async def recordmatch(self, context, winner, loser):
+        winner_record = get_record(winner)
+        loser_record = get_record(loser)
+        winner_elo = winner_record['elo_rating']
+        loser_elo = loser_record['elo_rating']
+        new_winner_elo, new_loser_elo = util.calc_elo_change(winner_elo, loser_elo)
+        bux_adjustment = 3.00 * (new_winner_elo - winner_elo) / 32
+        bux_adjustment = round(bux_adjustment, 2)
+        loser_bux_adjustment = round(bux_adjustment / 3, 2)
+
+        winnerid, loserid = winner_record['discord_id'], loser_record['discord_id']
+
+        set_record(winnerid, 'elo_rating', new_winner_elo)
+        set_record(loserid, 'elo_rating', new_loser_elo)
+
+        adjust_cash(winnerid, bux_adjustment)
+        adjust_cash(loserid, bux_adjustment / 3)
+        await self.bot.reply("{0} new elo: {1}\n{2} new elo: {3}\n{0} payout: ${4}\n{2} payout: ${5}"
+                             .format(winner_record['name'],
+                                     new_winner_elo,
+                                     loser_record['name'],
+                                     new_loser_elo,
+                                     bux_adjustment,
+                                     loser_bux_adjustment))
+
+    @commands.command(pass_context=True)
+    @req.registration()
+    @db.operation_async
+    async def changenick(self, context, nick, conn=None, cursor=None):
+        if not verify_nick(nick):
+            await self.bot.reply(("user with nickname {0} already exists. " +
+                                  "don't try to confuse old maple you hear!!").format(nick))
+        else:
+            cursor.execute("UPDATE users SET name=:nick WHERE discord_id=:user",
+                           {"nick": nick, "user": context.message.author.id})
+            conn.commit()
+            await self.bot.reply("updated nickname to {0}".format(nick))
+        return
+
+    @commands.command(pass_context=True)
+    async def userinfo(self, context, user=None):
+        user = user if user else context.message.author.id
+        record = get_record(user)
+        outstring = ('*nickname*: {name}' +
+                     '\n*discord id*: {discord_id}' +
+                     '\n*elo rating*: {elo_rating}' +
+                     '\n*maplebux*: {cash}').format(**record)
+        outstring = re.sub(r'\n\s+', '\n', outstring)
+
+        await self.bot.say(outstring)
+
+
+def setup(bot):
+    bot.add_cog(UserManagement(bot))

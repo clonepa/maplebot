@@ -44,7 +44,7 @@ def scryfall_card_format(card):
 #    --- COMMANDS ---    #
 
 
-class CardInfo():
+class Scryfall():
     def __init__(self, bot):
         self.bot = bot
 
@@ -118,4 +118,4 @@ class CardInfo():
 
 
 def setup(bot):
-    bot.add_cog(CardInfo(bot))
+    bot.add_cog(Scryfall(bot))

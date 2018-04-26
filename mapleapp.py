@@ -1,6 +1,5 @@
 from flask import Flask
 from flask import render_template
-import sqlite3
 import maplebot
 import maple
 app = Flask(__name__)
