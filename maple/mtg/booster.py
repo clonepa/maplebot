@@ -355,6 +355,20 @@ class MTGBoosters():
         await self.bot.reply("{0} {1} booster(s) added to <@{2}>'s inventory!"
                              .format(amount, card_set, target_id))
 
+    @commands.command(pass_context=True)
+    @db.operation
+    async def setcode(self, context, set_name: str, conn=None, cursor=None):
+        set_name = context.message.content.split(maxsplit=1)[1]
+        cursor.execute("SELECT name, code FROM set_map WHERE name LIKE :set_name",
+                       {"set_name": '%{0}%'.format(set_name)})
+        results = cursor.fetchall()
+        if not results:
+            return await self.bot.reply("no sets matchin *{0}* were found...".format(set_name))
+        if len(results) > 14:
+            return await self.bot.reply("too many matching sets!! narrow it down a little")
+        outstring = '\n'.join(["code for set *{0[0]}* is **{0[1]}**".format(result) for result in results])
+        await self.bot.reply(outstring)
+
 
 def setup(bot):
     bot.add_cog(MTGBoosters(bot))

@@ -1,8 +1,13 @@
 import sys
 import sqlite3
+import json
+import logging
 
 from discord.ext import commands
 from . import req, db, util, users
+
+
+logger = logging.getLogger('maple.debug')
 
 
 class Debug():
@@ -56,11 +61,35 @@ class Debug():
             conn.close()
         await util.big_output_confirmation(context, output, formatting=util.codeblock)
 
-    @commands.command(aliases=["adjustbux"])
+    @commands.command(aliases=["changebux"])
     @req.debug
-    async def changebux(self, target, amount: float):
+    async def adjustbux(self, target, amount: float):
         users.adjust_cash(target, amount)
         await self.bot.reply("updated bux")
+
+    @commands.command()
+    @req.debug
+    async def populatesetinfo():
+        # do not use load_mtgjson() here
+        with open('AllSets.json', encoding="utf8") as f:
+            cardobj = json.load(f)
+        conn = sqlite3.connect('maple.db')
+        cursor = conn.cursor()
+        for card_set in cardobj:
+            logger.info(cardobj[card_set]["name"])
+            name = ""
+            code = ""
+            alt_code = ""
+            if "name" in cardobj[card_set]:
+                name = cardobj[card_set]["name"]
+            if "code" in cardobj[card_set]:
+                code = cardobj[card_set]["code"]
+            if "magicCardsInfoCode" in cardobj[card_set]:
+                alt_code = cardobj[card_set]["magicCardsInfoCode"]
+            if code != "" and name != "":
+                cursor.execute("INSERT OR IGNORE INTO set_map VALUES (?, ?, ?)", (name, code, alt_code))
+        conn.commit()
+        conn.close()
 
 
 def setup(bot):

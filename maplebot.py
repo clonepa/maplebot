@@ -1,8 +1,5 @@
-import sqlite3
-import json
 import os
 import logging
-import asyncio
 
 import coloredlogs
 from discord.ext import commands
@@ -10,8 +7,7 @@ from discord.ext import commands
 import bottalk
 import mapleconfig
 
-import maple.req
-import maple.users
+from maple.mtg import deckhash
 
 import blackjack
 
@@ -24,8 +20,8 @@ logger = logging.getLogger('maplebot')
 
 
 maplebot = commands.Bot(command_prefix='!',
-                             description='maple the gamification cat',
-                             help_attrs={"name": "maplehelp"})
+                        description='maple the gamification cat',
+                        help_attrs={"name": "maplehelp"})
 
 
 # ------------------- COMMANDS ------------------- #
@@ -38,34 +34,6 @@ async def hash(context):
     await maplebot.reply('hashed deck: {0}'.format(hashed_thing))
 
 
-# ---- That Debug Shit ---- #
-
-
-@maplebot.command()
-@maple.req.debug
-async def populatesetinfo():
-    # do not use load_mtgjson() here
-    with open('AllSets.json', encoding="utf8") as f:
-        cardobj = json.load(f)
-    conn = sqlite3.connect('maple.db')
-    cursor = conn.cursor()
-    for card_set in cardobj:
-        logger.info(cardobj[card_set]["name"])
-        name = ""
-        code = ""
-        alt_code = ""
-        if "name" in cardobj[card_set]:
-            name = cardobj[card_set]["name"]
-        if "code" in cardobj[card_set]:
-            code = cardobj[card_set]["code"]
-        if "magicCardsInfoCode" in cardobj[card_set]:
-            alt_code = cardobj[card_set]["magicCardsInfoCode"]
-        if code != "" and name != "":
-            cursor.execute("INSERT OR IGNORE INTO set_map VALUES (?, ?, ?)", (name, code, alt_code))
-    conn.commit()
-    conn.close()
-
-
 @maplebot.command()
 async def blackjacktest():
     hand = blackjack.deal_hand()
@@ -74,22 +42,6 @@ async def blackjacktest():
     for h in hand:
         outstring += h + " "
     await maplebot.say(outstring + "\nHand Score: " + str(score))
-
-
-@maplebot.command(pass_context=True)
-async def setcode(context, set_name: str):
-    set_name = context.message.content.split(maxsplit=1)[1]
-    conn = sqlite3.connect('maple.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT name, code FROM set_map WHERE name LIKE :set_name", {"set_name": '%{0}%'.format(set_name)})
-    results = cursor.fetchall()
-    conn.close()
-    if not results:
-        return await maplebot.reply("no sets matchin *{0}* were found...".format(set_name))
-    if len(results) > 14:
-        return await maplebot.reply("too many matching sets!! narrow it down a little")
-    outstring = '\n'.join(["code for set *{0[0]}* is **{0[1]}**".format(result) for result in results])
-    await maplebot.reply(outstring)
 
 
 @maplebot.event
@@ -125,6 +77,4 @@ if __name__ == "__main__":
             exc = '{}: {}'.format(type(e).__name__, e)
             print('Failed to load extension {}\n{}'.format(cog, exc))
     commands = list(maplebot.commands.keys())[:]
-    # for command in commands:
-        # poopese(maplebot.commands[command])
     maplebot.run(TOKEN)
