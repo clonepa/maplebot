@@ -7,7 +7,7 @@ from discord.ext import commands
 import bottalk
 import mapleconfig
 
-from maple import db, users
+from maple import db, users, req
 from maple.mtg import deckhash
 
 import blackjack
