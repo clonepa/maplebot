@@ -1,7 +1,7 @@
 from flask import Flask
 from flask import render_template
-import sqlite3
 import maplebot
+import maple
 app = Flask(__name__)
 
 
@@ -11,7 +11,7 @@ def index(user=None):
     user_record = None
     collection = None
     if user:
-        user_record = maplebot.get_user_record(user)
+        user_record = maple.get_record(user)
         collection = maplebot.export_collection_to_list(user)
     return render_template('index.html', user=user_record, collection=collection)
 
@@ -29,7 +29,7 @@ def deckbuilder(user=None):
     user_record = None
     collection = None
     if user:
-        user_record = maplebot.get_user_record(user)
+        user_record = maple.get_record(user)
         collection = maplebot.export_collection_to_list(user)
     return render_template('deck.html', user=user_record, collection=collection)
 
