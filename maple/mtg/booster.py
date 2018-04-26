@@ -356,7 +356,7 @@ class MTGBoosters():
                              .format(amount, card_set, target_id))
 
     @commands.command(pass_context=True)
-    @db.operation
+    @db.operation_async
     async def setcode(self, context, set_name: str, conn=None, cursor=None):
         set_name = context.message.content.split(maxsplit=1)[1]
         cursor.execute("SELECT name, code FROM set_map WHERE name LIKE :set_name",
