@@ -77,6 +77,8 @@ class BlackJackMachine:
                         self.active_players[i]['playstate'] = 'action'
                 self.current_state = "player_action"
                 self.dealer_hand = self.draw_cards()
+                if self.score_hand(self.dealer_hand()):
+                    self.current_state = "delear_action"
                 self.eval_state()
         elif self.current_state == "player_action":
             #dealer peek
@@ -98,9 +100,12 @@ class BlackJackMachine:
             self.dealer_hand += [self.card_shoe.pop()]
             await self.update_msg()
             await asyncio.sleep(1.25)
-        await asyncio.sleep(3)
+        
+        await asyncio.sleep(2)
+        
         self.reset()
         await self.update_msg()
+        
     async def parse_reaction_add(self, reaction, user):
         print(reaction.emoji.encode("unicode_escape"), user.id)
         #if reaction.emoji == '\U0001f60e':
