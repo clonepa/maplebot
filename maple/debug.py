@@ -19,9 +19,9 @@ class Debug():
         await self.bot.say("i'm {0} and my guts are made of python {1}, brah :surfer:"
                            .format(self.bot.user.name, sys.version.split()[0]))
 
-    @commands.command()
+    @commands.command(pass_context=True)
     @req.debug
-    async def setupdb(self):
+    async def setupdb(self, context):
         try:
             db.setup()
         except Exception as exc:
@@ -61,9 +61,10 @@ class Debug():
             conn.close()
         await util.big_output_confirmation(context, output, formatting=util.codeblock)
 
-    @commands.command(aliases=["changebux"])
+    @commands.command(pass_context=True, aliases=["changebux"])
     @req.debug
-    async def adjustbux(self, target, amount: float):
+    async def adjustbux(self, context, target, amount: float):
+        print(target, amount)
         users.adjust_cash(target, amount)
         await self.bot.reply("updated bux")
 

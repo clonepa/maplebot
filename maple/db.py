@@ -21,14 +21,15 @@ def operation(func):
 
 def operation_async(func):
     '''Decorator for functions that access the maple database'''
-    async def wrapped(*args, conn=None, **kwargs):
+    async def wrapped(self, context, *args, conn=None, **kwargs):
         if not conn:
             conn = sqlite3.connect(DB_NAME)
             self_conn = True
         else:
             self_conn = False
         cursor = conn.cursor()
-        return_value = func(*args, **kwargs, conn=conn, cursor=cursor)
+        newargs = [context.command.transform(context, arg) for arg in args]
+        return_value = await func(self, context, *newargs, conn=conn, cursor=cursor, **kwargs)
         if self_conn:
             conn.close()
         return return_value

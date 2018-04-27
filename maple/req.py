@@ -22,8 +22,8 @@ def debug(func):
             await self.bot.reply("that's a debug command, you rascal!")
             return
         else:
-            await func(self, context, *args, **kwargs)
-            return await func(self, context, *args, **kwargs)
+            newargs = [context.command.transform(context, arg) for arg in args]
+            await func(self, context, *newargs, **kwargs)
 
     wrapped.__name__ = func.__name__
     return wrapped
@@ -37,8 +37,8 @@ def registration(func):
             await self.bot.reply("you ain't registered!!")
             return
         else:
-            await func(self, context, *args, **kwargs)
-            return await func(self, context, *args, **kwargs)
+            newargs = [context.command.transform(context, arg) for arg in args]
+            await func(self, context, *newargs, **kwargs)
 
     wrapped.__name__ = func.__name__
     return wrapped
