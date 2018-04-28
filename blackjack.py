@@ -46,9 +46,9 @@ class BlackJackMachine:
         self.cmd_reactions_add = {'\U0001f60e': self.cmd_join,
                                   '\U0001f1ed': self.cmd_hit,
                                   '\U0001f1f8': self.cmd_stand,
+                                  '\u2935': self.cmd_double_down,
+                                  #'\U0001f4b8': self.cmd_insurance_bet, #not sure if we want insurance bets yet...
                                   '\U0001f198': self.cmd_surrender,
-                                  #'\u23ea': self.cmd_dec_bet_large,
-                                  #'\u25c0': self.cmd_dec_bet_small,
                                   '\u25b6': self.cmd_inc_bet_small,
                                   '\u23e9': self.cmd_inc_bet_medium,
                                   '\u23ed': self.cmd_inc_bet_large,
@@ -178,7 +178,18 @@ class BlackJackMachine:
         elif pscore == 21:
             self.active_players[user]['playstate'] = 'stand'
 
-        
+    def cmd_double_down(self, user):
+        if self.current_state != "player_action" or self.active_players[user]['playstate'] != 'action':
+            return
+        pass
+        #todo: implement this
+    
+    def cmd_insurance_bet(self, user):
+        if self.current_state != "player_action" or self.active_players[user]['playstate'] != 'action':
+            return
+        pass
+        #todo: implement this, maybe...
+    
     def cmd_stand(self, user):
         if self.current_state != "player_action" or self.active_players[user]['playstate'] != 'action':
             return
