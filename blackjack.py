@@ -5,43 +5,31 @@ import random
 import json
 
 
+#alternative symbol storage
 #SUITS = ('♧', '♢', '♡', '♤')
 #RANKS = ('Ⅱ', 'Ⅲ', 'Ⅳ', 'Ⅴ', 'Ⅵ', 'Ⅶ', 'Ⅷ', 'Ⅸ', 'Ⅹ', 'J', 'Q', 'K', 'A')
 #SUITS = ('♣', '♦', '♥', '♠')
 
 #under heavy construction
 
-
-
-
-
 class BlackJackMachine:
-    current_phase = "bet"
     SUITS = ('c', 'd', 'h', 's')
     RANKS = ('2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A')
-    #RANKS = ('A', '5')
     
+    #smarter ways to do this, maybe later
     SCORES = {'2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'T':10,'J':10,'Q':10,'K':10,'A':11}
     DECK = tuple(''.join(card) for card in itertools.product(RANKS, SUITS))
-
-    
-    
-    
-    #msg = None
-    #client = None
-    #cmd_reactions_add = None
     
     def __init__(self, client):
         self.msg = None
         self.active_players = {}
         self.dealer_hand = {}
         self.dealer_last_hand = 0
-
         self.dealer_result = ""
         self.dealer_previous_result = ""
         self.card_shoe = list(self.DECK)
+        self.refill_shoe(4)     
         self.current_state = "bet"
-        self.refill_shoe(4)
         self.client = client
         self.cmd_reactions_add = {'\U0001f60e': self.cmd_join,
                                   '\U0001f1ed': self.cmd_hit,
@@ -54,12 +42,15 @@ class BlackJackMachine:
                                   '\u23ed': self.cmd_inc_bet_large,
                                   '\U0001f196': self.cmd_clear_bet,
                                   '\U0001f171': self.cmd_accept_bet}
+        self.cmd_reactions_remove = {'\U0001f60e': self.cmd_leave}
+                                     
             
-    def refill_shoe(self, decks = 8):
+    def refill_shoe(self, decks = 4):
         self.card_shoe = list(self.DECK) * decks
         random.shuffle(self.card_shoe)
 
     def draw_cards(self, amount=2):
+        #todo: check if shoe is almost empty and refill it
         outlist = []
         for i in range(amount):
             outlist += [self.card_shoe.pop()]

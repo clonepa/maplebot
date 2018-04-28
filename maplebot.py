@@ -1417,8 +1417,7 @@ async def on_ready():
 @maplebot.event
 async def on_reaction_add(reaction, user):
     if user == maplebot.user:
-        return
-    
+        return 
     for sweetbaby in reactables:
         if sweetbaby.msg.id != None and (sweetbaby.msg.id == reaction.message.id):
             await sweetbaby.parse_reaction_add(reaction, user)
