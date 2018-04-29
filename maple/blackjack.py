@@ -388,7 +388,7 @@ class BlackJackMachine:
         return total
 
     def print_state(self):
-        lines = ["~ Maplebot Presents Vegas-Style Blackjack ~"]
+        lines = ["～ 𝓜𝓪𝓹𝓵𝓮𝓫𝓸𝓽 𝓟𝓻𝓮𝓼𝓮𝓷𝓽𝓼 𝓥𝓮𝓰𝓪𝓼-𝓢𝓽𝔂𝓵𝓮 𝓑𝓵𝓪𝓬𝓴𝓳𝓪𝓬𝓴 ～"]
         lines += [self.print_dealer_info()]
         for pp in self.active_players:
             lines += [self.print_player_info(self.active_players[pp] ) ]                                                                                              
