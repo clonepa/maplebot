@@ -1,6 +1,7 @@
 import requests
 import asyncio
 import math
+import collections
 
 # ---- type converters ---- #
 
@@ -86,3 +87,57 @@ def calc_elo_change(winner, loser):
     rr2 = loser + k * (0 - e2)
 
     return math.ceil(rr1), math.ceil(rr2)
+
+
+def int2str(num, base=16, sbl=None):
+    """Converts a number to base `base`, with alphabet `sbl`.
+    Shamelessly stolen from http://stackoverflow.com/a/4665054/344643
+    num -- The number to convert.
+    base -- The base to convert to.
+    sbl -- The alphabet to use. If not specified, defaults to nunbers and then
+        lowercase letters.
+    """
+
+    if not sbl:
+        sbl = '0123456789abcdefghijklmnopqrstuvwxyz'
+    if len(sbl) < 2:
+        raise ValueError('size of symbols should be >= 2')
+    if base < 2 or base > len(sbl):
+        raise ValueError('base must be in range 2-%d' % (len(sbl)))
+
+    neg = False
+    if num < 0:
+        neg = True
+        num = -num
+
+    num, rem = divmod(num, base)
+    ret = ''
+    while num:
+        ret = sbl[rem] + ret
+        num, rem = divmod(num, base)
+    ret = ('-' if neg else '') + sbl[rem] + ret
+
+    return ret
+
+
+def fetchone_dict(cursor):
+    columns = [description[0] for description in cursor.description]
+    out_dict = collections.OrderedDict.fromkeys(columns)
+    result = cursor.fetchone()
+    if not result:
+        return
+    for i, key in enumerate(out_dict):
+        out_dict[key] = result[i]
+    return dict(out_dict)
+
+
+def fetchall_dict(cursor):
+    columns = [description[0] for description in cursor.description]
+    fetched = cursor.fetchall()
+    out_list = []
+    for entry in fetched:
+        out_dict = collections.OrderedDict.fromkeys(columns)
+        for i, key in enumerate(out_dict):
+            out_dict[key] = entry[i]
+        out_list.append(dict(out_dict))
+    return out_list
