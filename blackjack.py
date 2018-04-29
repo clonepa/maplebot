@@ -4,6 +4,7 @@ import itertools
 import random
 import json
 import math
+import maple.brains
 
 #alternative symbol storage
 #SUITS = ('♧', '♢', '♡', '♤')
@@ -196,7 +197,9 @@ class BlackJackMachine:
     async def parse_reaction_add(self, reaction, user):
         print(reaction.emoji.encode("unicode_escape"), user.id)
         valid = False
-        if reaction.emoji in self.cmd_reactions_add:
+        if user.id not in self.active_players:
+            valid = False
+        elif reaction.emoji in self.cmd_reactions_add:
             valid = self.cmd_reactions_add[reaction.emoji](user.id)
             
         #keep join emoji
@@ -235,7 +238,9 @@ class BlackJackMachine:
         
     #input
     def cmd_join(self, user):
-        self.active_players[user] = {'name': user[:6],
+        user_rec = brains.get_record(user)
+        print(user_rec)
+        self.active_players[user] = {'name': user_rec['name'],
                                      'current_bet': 0,
                                      'hand': {},
                                      'last_hand': 0,                                 

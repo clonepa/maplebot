@@ -4,6 +4,7 @@ import itertools
 import random
 import json
 import math
+import maple.brains
 
 #alternative symbol storage
 #SUITS = ('♧', '♢', '♡', '♤')
@@ -235,7 +236,9 @@ class BlackJackMachine:
         
     #input
     def cmd_join(self, user):
-        self.active_players[user] = {'name': user[:6],
+        user_rec = maple.brains.get_record(user)
+        print(user_rec)
+        self.active_players[user] = {'name': user_rec['name'],
                                      'current_bet': 0,
                                      'hand': {},
                                      'last_hand': 0,                                 
@@ -363,8 +366,7 @@ class BlackJackMachine:
         return total
 
     def print_state(self):
-        #todo: make this print pretty
-        lines = []
+        lines = ["~Maplebot Presents: Vegas-Style Blackjack (just for fun!)~"]
         lines += [self.print_dealer_info()]
         for pp in self.active_players:
             lines += [self.print_player_info(self.active_players[pp] ) ]                                                                                              
