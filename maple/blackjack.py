@@ -199,7 +199,7 @@ class BlackJackMachine:
         
         outstring += str(p['name']) + " (" + p['playstate'] + ")\n"
         outstring += "  " + strhand + " " + p['current_result'] + "\n"
-        outstring += "  Bet: " + str(p['current_bet']) + "¢ (Session Winnings: " + str(p['session_winnings']) + "¢)\n"    
+        outstring += "  Bet: " + str(p['current_bet']) + " (Session Winnings: " + str(p['session_winnings']) + ")\n"    
         outstring += "  Prev. Hand: " + str(p['last_hand']) + " " + p['previous_result']
         return outstring
         
@@ -275,7 +275,7 @@ class BlackJackMachine:
         #todo: auto surrender
         if user in self.active_players:
             self.active_players.pop(user)
-        
+            return True
         
     def cmd_hit(self, user):
         if self.current_state != "player_action" or self.active_players[user]['playstate'] != 'action':
