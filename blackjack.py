@@ -98,7 +98,9 @@ class BlackJackMachine:
             current_player_score = self.score_hand(self.active_players[p]['hand'])
             if current_player_score > highest_player_score:
                 highest_player_score = current_player_score
-        
+
+        await self.update_msg()
+        await asyncio.sleep(1.25)
         while self.score_hand(self.dealer_hand) < min(highest_player_score, 17):
             self.dealer_hand += [self.card_shoe.pop()]
             await self.update_msg()
@@ -167,7 +169,7 @@ class BlackJackMachine:
                 strhand += h + " "
             strhand += ": " + str(self.score_hand(self.dealer_hand))
         outstring = "DEALER: " + strhand + " " + self.dealer_status
-        #outstring += "  Prev. Hand: " + str(self.dealer_last_hand)
+        outstring += "  [Prev. Hand: " + str(self.dealer_last_hand) + "]"
         return outstring
     def print_player_info(self, p):
         outstring = ""
