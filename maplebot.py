@@ -1294,11 +1294,11 @@ async def blackjacktest(context):
     if command == "new":
         global reactables
         new_bj = blackjack.BlackJackMachine(maplebot)
-        new_bj.msg = await maplebot.say(new_bj.print_state())
+        new_bj.msg = await maplebot.say("```Pwease wait warmly uwu...```")
         for emoji in new_bj.cmd_reactions_add:
             await maplebot.add_reaction(new_bj.msg, emoji)
         reactables += [new_bj]
-            
+        await new_bj.update_msg()
 @maplebot.command(pass_context=True, aliases=["maplecard", "maplecardinfo"])
 async def cardinfo(context):
     message = context.message

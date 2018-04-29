@@ -3,7 +3,7 @@ import asyncio
 import itertools
 import random
 import json
-
+import math
 
 #alternative symbol storage
 #SUITS = ('♧', '♢', '♡', '♤')
@@ -25,18 +25,17 @@ class BlackJackMachine:
         self.active_players = {}
         self.dealer_hand = {}
         self.dealer_last_hand = 0
-        self.dealer_result = ""
-        self.dealer_previous_result = ""
+        self.dealer_status = ""
         self.card_shoe = list(self.DECK)
         self.refill_shoe(4)     
         self.current_state = "bet"
         self.client = client
         self.cmd_reactions_add = {'\U0001f60e': self.cmd_join,
                                   '\U0001f1ed': self.cmd_hit,
-                                  '\U0001f1f8': self.cmd_stand,
-                                  '\u2935': self.cmd_double_down,
+                                  '\U0001f1f8': self.cmd_stand,                                 
                                   #'\U0001f4b8': self.cmd_insurance_bet, #not sure if we want insurance bets yet...
                                   '\U0001f198': self.cmd_surrender,
+                                  '\u2935': self.cmd_double_down,
                                   '\u25b6': self.cmd_inc_bet_small,
                                   '\u23e9': self.cmd_inc_bet_medium,
                                   '\u23ed': self.cmd_inc_bet_large,
@@ -61,20 +60,23 @@ class BlackJackMachine:
             #check if all bets are accpeted
             all_ready = True
             for i in self.active_players:
-                if self.active_players[i]['playstate'] != 'bet_locked' and self.active_players[i]['playstate'] != 'waiting':
+                if self.active_players[i]['playstate'] != 'bet locked' and self.active_players[i]['playstate'] != 'waiting':
                     all_ready = False
             if all_ready:
                 for i in self.active_players:
-                    if self.active_players[i]['playstate'] == 'bet_locked':
+                    if self.active_players[i]['playstate'] == 'bet locked':
                         self.active_players[i]['hand'] = self.draw_cards()
-                        self.active_players[i]['playstate'] = 'action'
+                        if self.score_hand(self.active_players[i]['hand']) == 21:
+                            self.active_players[i]['playstate'] = 'stand'
+                        else:
+                            self.active_players[i]['playstate'] = 'action'
                 self.current_state = "player_action"
                 self.dealer_hand = self.draw_cards()
+                #dealer peek
                 if self.score_hand(self.dealer_hand) == 21:
                     self.current_state = "dealer_action"
                 self.eval_state()
         elif self.current_state == "player_action":
-            #todo: dealer peek
             #check if all players have stood or lost
             all_ready = True
             for p in self.active_players:
@@ -90,34 +92,118 @@ class BlackJackMachine:
 
     async def dealer_action(self):
 
-        #todo: find highest player hand and stop when we beat it
-        while self.score_hand(self.dealer_hand) < 17:
+        #find highest player hand and stop when we beat it or hit 17
+        highest_player_score = 0
+        for p in self.active_players:
+            current_player_score = self.score_hand(self.active_players[p]['hand'])
+            if current_player_score > highest_player_score:
+                highest_player_score = current_player_score
+        
+        while self.score_hand(self.dealer_hand) < min(highest_player_score, 17):
             self.dealer_hand += [self.card_shoe.pop()]
             await self.update_msg()
             await asyncio.sleep(1.25)
-            
-        #todo: set result for dealer/players to win/lose/push
 
-        await asyncio.sleep(2)
+        if self.score_hand(self.dealer_hand) > 21:
+            self.dealer_status = "BUST"
+           
+        #set result for dealer/players to win/lose/push
+        self.figure_out_who_won()
+        self.settle_bets()
+        await self.update_msg()
+        
+        await asyncio.sleep(3)
         
         self.reset()
         await self.update_msg()
+        
+    def figure_out_who_won(self):
+        #todo: make natural 21 beat other 21
+        for p in self.active_players:
+            pp = self.active_players[p]
 
+            if self.score_hand(self.dealer_hand) > 21:
+                if pp['playstate'] == 'bust':
+                    pp['current_result'] = "PUSH"
+                else:
+                    pp['current_result'] = "WIN"
+                continue
+            
+            if pp['playstate'] == 'surrender':
+                pp['current_result'] = "SURRENDER"
+            elif pp['playstate'] == 'bust':
+                pp['current_result'] = "LOSE"  
+            elif self.score_hand(pp['hand']) > self.score_hand(self.dealer_hand):
+                pp['current_result'] = "WIN"
+            elif self.score_hand(pp['hand']) == self.score_hand(self.dealer_hand):
+                pp['current_result'] = "PUSH"
+            else:
+                pp['current_result'] = "LOSE"
+
+    def settle_bets(self):
+        #todo: implement 3:2 for blackjack
+        for p in self.active_players:
+            pp = self.active_players[p]
+            bet = pp["current_bet"]
+            if pp['current_result'] == "WIN":
+                pp['session_winnings'] += bet
+            elif pp['current_result'] == "LOSE":
+                pp['session_winnings'] -= bet
+            elif pp['current_result'] == "SURRENDER":
+                pp['session_winnings'] -= int(math.ceil(bet/2))
+            
+        
+        
+    def print_dealer_info(self):
+        outstring = ""
+        strhand = ""
+
+        if len(self.dealer_hand) == 0:
+            strhand = "? ? ? ?"
+        elif self.current_state == 'player_action':
+            strhand = self.dealer_hand[0] + " ?? : " + str(self.SCORES[self.dealer_hand[0][0]]) 
+        else:
+            for h in self.dealer_hand:
+                strhand += h + " "
+            strhand += ": " + str(self.score_hand(self.dealer_hand))
+        outstring = "DEALER: " + strhand + " " + self.dealer_status
+        #outstring += "  Prev. Hand: " + str(self.dealer_last_hand)
+        return outstring
+    def print_player_info(self, p):
+        outstring = ""
+        strhand = ""
+        
+        if len(p['hand']) == 0:
+            strhand = "?? ??"
+        else:
+            for h in p['hand']:
+                strhand += h + " "
+            strhand += ": " + str(self.score_hand(p['hand']))
+        
+        outstring += str(p['name']) + " (" + p['playstate'] + ")\n"
+        outstring += "  " + strhand + " " + p['current_result'] + "\n"
+        outstring += "  Bet: " + str(p['current_bet']) + " (Session Winnings: " + str(p['session_winnings']) + ")\n"    
+        outstring += "  Prev. Hand: " + str(p['last_hand']) + " " + p['previous_result']
+        return outstring
+        
+        
     async def parse_reaction_remove(self, reaction, user):
         pass
         #todo: allow user to exit game. if current state is action, auto surrender
         
     async def parse_reaction_add(self, reaction, user):
         print(reaction.emoji.encode("unicode_escape"), user.id)
+        valid = False
         if reaction.emoji in self.cmd_reactions_add:
-            self.cmd_reactions_add[reaction.emoji](user.id)
+            valid = self.cmd_reactions_add[reaction.emoji](user.id)
             
         #keep join emoji
         if reaction.emoji != "\U0001f60e":
             await self.client.remove_reaction(self.msg, reaction.emoji, user)       
 
-        self.eval_state()    
-        await self.update_msg()
+        if valid:
+            self.eval_state()    
+            await self.update_msg()
             
         # \U0001f60e - sunglasses
         # \U0001f1ed - H
@@ -133,27 +219,34 @@ class BlackJackMachine:
     def reset(self):
         for i in self.active_players:
                 self.active_players[i]['playstate'] = 'betting'
-                self.active_players[i]['previous_result'] = self.active_players[i]['current_result']
+                self.active_players[i]['previous_result'] = self.active_players[i]['current_result'][:1]
                 self.active_players[i]['current_result'] = ""
                 self.active_players[i]['last_hand'] = self.score_hand(self.active_players[i]['hand'])
                 self.active_players[i]['hand'] = {}
+                if self.active_players[i]['double_down']:
+                    self.active_players[i]['current_bet'] = int(self.active_players[i]['current_bet'] / 2)
+                    self.active_players[i]['double_down'] = False
+        self.dealer_last_hand = self.score_hand(self.dealer_hand)
         self.dealer_hand = {}
+        self.dealer_status = ""
         self.current_state = "bet"
         
     #input
     def cmd_join(self, user):
-        self.active_players[user] = {'current_bet': 0,
+        self.active_players[user] = {'name': user[:6],
+                                     'current_bet': 0,
                                      'hand': {},
                                      'last_hand': 0,                                 
                                      'playstate': 'waiting',
-                                     'last_payout': 0,
+                                     'session_winnings': 0,
                                      'previous_result': "",
-                                     'current_result': ""}
+                                     'current_result': "",
+                                     'double_down': False}
         
         if self.current_state == 'bet':
             self.active_players[user]['playstate'] = 'betting'
         print (self.active_players)
-
+        return True
         
     def cmd_leave(self, user):
         self.active_players.pop(user)
@@ -161,86 +254,93 @@ class BlackJackMachine:
         
     def cmd_hit(self, user):
         if self.current_state != "player_action" or self.active_players[user]['playstate'] != 'action':
-            return
+            return False
         self.active_players[user]['hand'] += [self.card_shoe.pop()]
         pscore = self.score_hand(self.active_players[user]['hand'])
         if pscore > 21:
             self.active_players[user]['playstate'] = 'bust'
         elif pscore == 21:
             self.active_players[user]['playstate'] = 'stand'
-
+        return True
+        
     def cmd_double_down(self, user):
         if self.current_state != "player_action" or self.active_players[user]['playstate'] != 'action':
-            return
-        pass
-        #todo: implement this
-    
+            return False
+        self.active_players[user]['current_bet'] += self.active_players[user]['current_bet'] 
+        self.active_players[user]['hand'] += [self.card_shoe.pop()]
+        if self.score_hand(self.active_players[user]['hand']) > 21:
+            self.active_players[user]['playstate'] = 'bust'
+        else:
+            self.active_players[user]['playstate'] = 'stand'
+        self.active_players[user]['double_down'] = True
+        return True
+        
     def cmd_insurance_bet(self, user):
         if self.current_state != "player_action" or self.active_players[user]['playstate'] != 'action':
-            return
+            return False
         pass
         #todo: implement this, maybe...
     
     def cmd_stand(self, user):
         if self.current_state != "player_action" or self.active_players[user]['playstate'] != 'action':
-            return
+            return False
         self.active_players[user]['playstate'] = 'stand'
-
+        return True
         
     def cmd_surrender(self, user):
         if self.current_state != "player_action" or self.active_players[user]['playstate'] != 'action':
-            return
+            return False
         self.active_players[user]['playstate'] = 'surrender'
-        self.eval_state()
+        return True
         
     def cmd_inc_bet_small(self, user):
         if self.current_state != "bet" or self.active_players[user]['playstate'] != 'betting':
-            return
+            return False
         
         self.active_players[user]['current_bet'] += 1
-            
-        self.eval_state()
+        return True 
         
     def cmd_inc_bet_medium(self, user):
         if self.current_state != "bet" or self.active_players[user]['playstate'] != 'betting':
-            return
+            return False
         
         self.active_players[user]['current_bet'] += 10
             
-
+        return True
 
     def cmd_inc_bet_large(self, user):
         if self.current_state != "bet" or self.active_players[user]['playstate'] != 'betting':
-            return
+            return False
         
         self.active_players[user]['current_bet'] += 25
             
-
+        return True
        
     def cmd_dec_bet_small(self, user):
         if self.current_state != "bet" or self.active_players[user]['playstate'] != 'betting':
-            return
+            return False
         if self.active_players[user]['current_bet'] > 1:
             self.active_players[user]['current_bet'] -= 1
-
+        return True
         
     def cmd_dec_bet_large(self, user):
         if self.current_state != "bet" or self.active_players[user]['playstate'] != 'betting':
-            return
+            return False
         if self.active_players[user]['current_bet'] > 10:
             self.active_players[user]['current_bet'] -= 10
-
+        return True
         
     def cmd_clear_bet(self, user):
         if self.current_state != "bet" or self.active_players[user]['playstate'] != 'betting':
-            return
+            return False
         self.active_players[user]['current_bet'] = 0
-        
+        return True
+    
     def cmd_accept_bet(self, user):
         if self.current_state != "bet" or self.active_players[user]['playstate'] != 'betting':
-            return
-        self.active_players[user]['playstate'] = 'bet_locked'
-
+            return False
+        self.active_players[user]['playstate'] = 'bet locked'
+        return True
 
     def score_hand(self, hand):
         total = 0
@@ -263,15 +363,14 @@ class BlackJackMachine:
     def print_state(self):
         #todo: make this print pretty
         lines = []
-        lines += ["DEALER HAND: {0} ({1})".format(self.dealer_hand, self.score_hand(self.dealer_hand))]
+        lines += [self.print_dealer_info()]
         for pp in self.active_players:
-            lines += ['{0} HAND: {1} ({2}), BET: {3}, PREVIOUS HAND: {4}, STATE: {5}'.format(pp[:8], self.active_players[pp]['hand'], self.score_hand(self.active_players[pp]['hand']), self.active_players[pp]['current_bet'], self.active_players[pp]['last_hand'], self.active_players[pp]['playstate'])]
-                                                                                                            
+            lines += [self.print_player_info(self.active_players[pp] ) ]                                                                                              
 
         output = ""
         for l in lines:
             output += l + "\n"
-        return output
+        return "```" + output + "```"
     
     async def update_msg(self):
         await self.client.edit_message(self.msg, self.print_state())
