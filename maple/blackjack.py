@@ -96,6 +96,9 @@ class BlackJackMachine:
         #find highest player hand and stop when we beat it or hit 17
         highest_player_score = 0
         for p in self.active_players:
+            pstate = self.active_players[p]['playstate']
+            if pstate == 'surrender' or pstate == 'bust':
+                continue                                                              
             current_player_score = self.score_hand(self.active_players[p]['hand'])
             if current_player_score > highest_player_score:
                 highest_player_score = current_player_score
@@ -125,6 +128,10 @@ class BlackJackMachine:
         for p in self.active_players:
             pp = self.active_players[p]
 
+            if pp['playstate'] == 'surrender':
+                pp['current_result'] = "SURRENDER"
+                continue
+            
             if self.score_hand(self.dealer_hand) > 21:
                 if pp['playstate'] == 'bust':
                     pp['current_result'] = "PUSH"
@@ -132,9 +139,8 @@ class BlackJackMachine:
                     pp['current_result'] = "WIN"
                 continue
             
-            if pp['playstate'] == 'surrender':
-                pp['current_result'] = "SURRENDER"
-            elif pp['playstate'] == 'bust':
+            
+            if pp['playstate'] == 'bust':
                 pp['current_result'] = "LOSE"  
             elif self.score_hand(pp['hand']) > self.score_hand(self.dealer_hand):
                 pp['current_result'] = "WIN"
@@ -295,6 +301,8 @@ class BlackJackMachine:
     def cmd_surrender(self, user):
         if self.current_state != "player_action" or self.active_players[user]['playstate'] != 'action':
             return False
+        if len(self.active_players[user]['hand']) > 2:
+            return False
         self.active_players[user]['playstate'] = 'surrender'
         return True
         
@@ -366,7 +374,7 @@ class BlackJackMachine:
         return total
 
     def print_state(self):
-        lines = ["~ Maplebot Presents Vegas-Style Blackjack (just for fun!) ~"]
+        lines = ["~ Maplebot Presents Vegas-Style Blackjack ~"]
         lines += [self.print_dealer_info()]
         for pp in self.active_players:
             lines += [self.print_player_info(self.active_players[pp] ) ]                                                                                              

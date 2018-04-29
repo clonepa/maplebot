@@ -34,6 +34,12 @@ class Blackjack():
         for sweetbaby in self.reactables:
             if sweetbaby.msg.id != None and (sweetbaby.msg.id == reaction.message.id):
                 await sweetbaby.parse_reaction_add(reaction, user)
-
+    async def on_reaction_remove(self, reaction, user):
+        if user == self.bot.user:
+            return
+        for sweetbaby in self.reactables:
+            if sweetbaby.msg.id != None and (sweetbaby.msg.id == reaction.message.id):
+                await sweetbaby.parse_reaction_remove(reaction, user)
+    
 def setup(bot):
     bot.add_cog(Blackjack(bot))
