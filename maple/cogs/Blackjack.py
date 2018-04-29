@@ -20,7 +20,7 @@ class Blackjack():
     
         if command == "new":
             new_bj = blackjack.BlackJackMachine(self.bot)
-            new_bj.msg = await self.bot.say("```Pwease Wait Warmly uwu```")
+            new_bj.msg = await self.bot.say("```Pwease wait warmly... uwu```")
         
         for emoji in new_bj.cmd_reactions_add:
             await self.bot.add_reaction(new_bj.msg, emoji)
