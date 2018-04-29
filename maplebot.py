@@ -1,5 +1,7 @@
 import os
 import logging
+import traceback
+import sys
 
 import coloredlogs
 from discord.ext import commands
@@ -7,8 +9,7 @@ from discord.ext import commands
 import bottalk
 import mapleconfig
 
-from maple import db, users, req
-from maple.mtg import deckhash
+from maple import brains, util_mtg  # , collection, booster
 
 import blackjack
 
@@ -28,31 +29,10 @@ maplebot = commands.Bot(command_prefix='!',
 # ------------------- COMMANDS ------------------- #
 
 
-@maplebot.command(pass_context=True, no_pm=True, aliases=['mapleregister'])
-@db.operation_async
-async def register(self, context, nickname: str, conn=None, cursor=None):
-    user = context.message.author.id
-    cursor.execute('SELECT * FROM users WHERE discord_id=?', (user))
-    if cursor.fetchall():
-        await self.bot.reply("user with discord ID {0} already exists. don't try to pull a fast one on old maple!!"
-                             .format(user))
-    elif not users.verify_nick(nickname):
-        await self.bot.reply("user with nickname {0} already exists. don't try to confuse old maple you hear!!"
-                             .format(nickname))
-    else:
-        cursor.execute("INSERT INTO users VALUES (?,?,1500,50.00)", (user, nickname))
-        conn.commit()
-        # mtg.collection.give_homie_some_lands(user)
-        # mtg.booster.give_booster(user, "M13", 15)
-        await self.bot.reply('created user in database with ID {0} and nickname {1}!\n'.format(user, nickname) +
-                             'i gave homie 60 of each Basic Land and 15 Magic 2013 Booster Packs!!')
-    return
-
-
 @maplebot.command(pass_context=True)
 async def hash(context):
     thing_to_hash = context.message.content[len(context.message.content.split()[0]):]
-    hashed_thing = deckhash.make_deck_hash(*deckhash.convert_deck_to_boards(thing_to_hash))
+    hashed_thing = util_mtg.make_deck_hash(*util_mtg.convert_deck_to_boards(thing_to_hash))
     await maplebot.reply('hashed deck: {0}'.format(hashed_thing))
 
 
@@ -87,16 +67,45 @@ async def on_message(message):
                 await bottalk.respond_request(maplebot, message.author, bottalk_request[0], exc)
 
 
+class ErrorHandling():
+    def __init__(self, bot):
+        self.bot = bot
+
+    async def on_command_error(self, error, context):
+        if hasattr(context.command, 'on_error'):
+            return
+
+        error = getattr(error, 'original', error)
+
+        ignored = (commands.CommandNotFound, commands.NoPrivateMessage)
+
+        notify_str = 'please fix it.' if context.message.author.id in DEBUG_WHITELIST else 'please notify a dev.'
+
+        if isinstance(error, ignored):
+            return
+        elif isinstance(error, brains.MapleCheckError):
+            return await self.bot.send_message(context.message.channel,
+                                               '{} {}'.format(context.message.author.mention,
+                                                              error.message))
+        else:
+            await self.bot.send_message(context.message.channel,
+                                        'unhandled exception in command `{0}`:\n```\n{1}: {2}\n```\n{3}'
+                                        .format(context.command.name, type(error).__name__, error, notify_str))
+            traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
+            return
+
+
 if __name__ == "__main__":
     os.environ['COLOREDLOGS_LOG_FORMAT'] = "%(asctime)s %(name)s %(levelname)s %(message)s"
     coloredlogs.install(level='INFO')
-    start_cogs = ['maple.users', 'maple.debug', 'maple.mtg.scryfall', 'maple.mtg.collection', 'maple.mtg.booster']
+    start_cogs = ['UserManagement', 'Debug',
+                  'mtg.CardSearch', 'mtg.Collection', 'mtg.Booster']
+    maplebot.add_cog(ErrorHandling(maplebot))
     for cog in start_cogs:
         try:
-            maplebot.load_extension(cog)
+            maplebot.load_extension('maple.cogs.' + cog)
             print('loaded extension {}'.format(cog))
         except Exception as e:
             exc = '{}: {}'.format(type(e).__name__, e)
             print('Failed to load extension {}\n{}'.format(cog, exc))
-    commands = list(maplebot.commands.keys())[:]
     maplebot.run(TOKEN)

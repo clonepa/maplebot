@@ -1,36 +1,12 @@
+import logging
 import hashlib
 
-def int2str(num, base=16, sbl=None):
-    """Converts a number to base `base`, with alphabet `sbl`.
-    Shamelessly stolen from http://stackoverflow.com/a/4665054/344643
-    num -- The number to convert.
-    base -- The base to convert to.
-    sbl -- The alphabet to use. If not specified, defaults to nunbers and then
-        lowercase letters.
-    """
+from . import util
 
-    if not sbl:
-        sbl = '0123456789abcdefghijklmnopqrstuvwxyz'
-    if len(sbl) < 2:
-        raise ValueError('size of symbols should be >= 2')
-    if base < 2 or base > len(sbl):
-        raise ValueError('base must be in range 2-%d' % (len(sbl)))
+logger = logging.getLogger('maple.mtg.util')
 
-    neg = False
-    if num < 0:
-        neg = True
-        num = -num
 
-    num, rem = divmod(num, base)
-    ret = ''
-    while num:
-        ret = sbl[rem] + ret
-        num, rem = divmod(num, base)
-    ret = ('-' if neg else '') + sbl[rem] + ret
-
-    return ret
-
-def make_deck_hash(mainboard, sideboard=None):
+def make_deck_hash(mainboard, sideboard=[]):
     """Makes the Cockatrice deck hash for a deck.
     I expect that there are edge cases which have not been satisfied.
     mainboard -- The list of card names, as strings. Probably fails with
@@ -40,8 +16,6 @@ def make_deck_hash(mainboard, sideboard=None):
     sideboard -- Same as mainboard, except containing the cards in the
         sideboard.
     """
-
-    sideboard = sideboard or []
 
     # Combine the 'boards. Sideboard cards are prefixed with "SB:". Card names
     # are lowercased, but not "SB:".
@@ -60,18 +34,19 @@ def make_deck_hash(mainboard, sideboard=None):
     card_hash = hashlib.sha1(";".join(cards).encode("utf-8")).digest()
 
     card_hash = ((ord(chr(card_hash[0])) << 32)
-              +  (ord(chr(card_hash[1])) << 24)
-              +  (ord(chr(card_hash[2])) << 16)
-              +  (ord(chr(card_hash[3])) <<  8)
-              +  (ord(chr(card_hash[4]))      ))
+                + (ord(chr(card_hash[1])) << 24)
+                + (ord(chr(card_hash[2])) << 16)
+                + (ord(chr(card_hash[3])) <<  8)
+                + (ord(chr(card_hash[4]))      ))
 
     # Convert to... base 32?
-    card_hash = int2str(card_hash, 32)
-    
+    card_hash = util.int2str(card_hash, 32)
+
     # Pad with 0s to length 8.
     card_hash = (8 - len(card_hash)) * "0" + card_hash
 
     return card_hash
+
 
 def convert_deck_to_boards(deck_string):
     """Converts a deck in the format
@@ -89,7 +64,7 @@ def convert_deck_to_boards(deck_string):
     for i in cards:
         if not i:
             break
-        
+
         target_board = "main"
         if i.startswith("SB: "):
             target_board = "side"
@@ -103,6 +78,7 @@ def convert_deck_to_boards(deck_string):
             boards[target_board].append(name)
     return boards["main"], boards["side"]
 
+
 example_deck = """
 4 AEtherling
 48 Island
@@ -112,4 +88,4 @@ SB: 4 Essence Scatter
 """
 
 # Prints 3ldd9du8, which is correct.
-#print(make_deck_hash(*convert_deck_to_boards(example_deck)))
+# print(make_deck_hash(*convert_deck_to_boards(example_deck)))
