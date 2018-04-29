@@ -10,6 +10,8 @@ import time
 import base64
 import collections
 import logging
+import traceback
+import sys
 
 import coloredlogs
 import requests
@@ -19,6 +21,11 @@ import bottalk
 import deckhash
 import mapleconfig
 
+<<<<<<< HEAD
+=======
+from maple import brains, util_mtg  # , collection, booster
+
+>>>>>>> master
 import blackjack
 
 TOKEN = mapleconfig.get_token()
@@ -771,6 +778,7 @@ async def big_output_confirmation(context, output: str, max_len=1500, formatting
 # ------------------- COMMANDS ------------------- #
 
 
+<<<<<<< HEAD
 @maplebot.command()
 @debug_command()
 async def updatecollection(target: str, card_id: str, amount: int = 1):
@@ -1088,10 +1096,12 @@ async def recordmatch(context, winner, loser):
                                  loser_bux_adjustment))
 
 
+=======
+>>>>>>> master
 @maplebot.command(pass_context=True)
 async def hash(context):
     thing_to_hash = context.message.content[len(context.message.content.split()[0]):]
-    hashed_thing = deckhash.make_deck_hash(*deckhash.convert_deck_to_boards(thing_to_hash))
+    hashed_thing = util_mtg.make_deck_hash(*util_mtg.convert_deck_to_boards(thing_to_hash))
     await maplebot.reply('hashed deck: {0}'.format(hashed_thing))
 
 
@@ -1438,10 +1448,51 @@ async def on_message(message):
                 await bottalk.respond_request(maplebot, message.author, bottalk_request[0], exc)
 
 
+class ErrorHandling():
+    def __init__(self, bot):
+        self.bot = bot
+
+    async def on_command_error(self, error, context):
+        if hasattr(context.command, 'on_error'):
+            return
+
+        error = getattr(error, 'original', error)
+
+        ignored = (commands.CommandNotFound, commands.NoPrivateMessage)
+
+        notify_str = 'please fix it.' if context.message.author.id in DEBUG_WHITELIST else 'please notify a dev.'
+
+        if isinstance(error, ignored):
+            return
+        elif isinstance(error, brains.MapleCheckError):
+            return await self.bot.send_message(context.message.channel,
+                                               '{} {}'.format(context.message.author.mention,
+                                                              error.message))
+        else:
+            await self.bot.send_message(context.message.channel,
+                                        'unhandled exception in command `{0}`:\n```\n{1}: {2}\n```\n{3}'
+                                        .format(context.command.name, type(error).__name__, error, notify_str))
+            traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
+            return
+
+
 if __name__ == "__main__":
     os.environ['COLOREDLOGS_LOG_FORMAT'] = "%(asctime)s %(name)s %(levelname)s %(message)s"
     coloredlogs.install(level='INFO')
+<<<<<<< HEAD
     commands = list(maplebot.commands.keys())[:]
     for command in commands:
         poopese(maplebot.commands[command])
+=======
+    start_cogs = ['UserManagement', 'Debug',
+                  'mtg.CardSearch', 'mtg.Collection', 'mtg.Booster']
+    maplebot.add_cog(ErrorHandling(maplebot))
+    for cog in start_cogs:
+        try:
+            maplebot.load_extension('maple.cogs.' + cog)
+            print('loaded extension {}'.format(cog))
+        except Exception as e:
+            exc = '{}: {}'.format(type(e).__name__, e)
+            print('Failed to load extension {}\n{}'.format(cog, exc))
+>>>>>>> master
     maplebot.run(TOKEN)
