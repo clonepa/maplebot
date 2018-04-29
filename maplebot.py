@@ -11,7 +11,6 @@ import mapleconfig
 
 from maple import brains, util_mtg  # , collection, booster
 
-import blackjack
 
 
 TOKEN = mapleconfig.get_token()
@@ -34,16 +33,6 @@ async def hash(context):
     thing_to_hash = context.message.content[len(context.message.content.split()[0]):]
     hashed_thing = util_mtg.make_deck_hash(*util_mtg.convert_deck_to_boards(thing_to_hash))
     await maplebot.reply('hashed deck: {0}'.format(hashed_thing))
-
-
-@maplebot.command()
-async def blackjacktest():
-    hand = blackjack.deal_hand()
-    score = blackjack.eval_hand(hand)
-    outstring = ""
-    for h in hand:
-        outstring += h + " "
-    await maplebot.say(outstring + "\nHand Score: " + str(score))
 
 
 @maplebot.event
@@ -98,7 +87,7 @@ class ErrorHandling():
 if __name__ == "__main__":
     os.environ['COLOREDLOGS_LOG_FORMAT'] = "%(asctime)s %(name)s %(levelname)s %(message)s"
     coloredlogs.install(level='INFO')
-    start_cogs = ['UserManagement', 'Debug',
+    start_cogs = ['UserManagement', 'Debug', 'Blackjack',
                   'mtg.CardSearch', 'mtg.Collection', 'mtg.Booster']
     maplebot.add_cog(ErrorHandling(maplebot))
     for cog in start_cogs:
