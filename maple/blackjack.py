@@ -50,7 +50,8 @@ class BlackJackMachine:
         random.shuffle(self.card_shoe)
 
     def draw_cards(self, amount=2):
-        #todo: check if shoe is almost empty and refill it
+        if len(self.card_shoe) < 26:
+            self.refill_shoe(4)
         outlist = []
         for i in range(amount):
             outlist += [self.card_shoe.pop()]
@@ -92,14 +93,17 @@ class BlackJackMachine:
             
 
     async def dealer_action(self):
-
+        
         #find highest player hand and stop when we beat it or hit 17
         highest_player_score = 0
         for p in self.active_players:
             pstate = self.active_players[p]['playstate']
             if pstate == 'surrender' or pstate == 'bust':
-                continue                                                              
+                continue
             current_player_score = self.score_hand(self.active_players[p]['hand'])
+            if current_player_score == 21 and len(self.active_players[p]['hand']) == 2:
+                continue
+            
             if current_player_score > highest_player_score:
                 highest_player_score = current_player_score
 
@@ -124,13 +128,17 @@ class BlackJackMachine:
         await self.update_msg()
         
     def figure_out_who_won(self):
-        #todo: make natural 21 beat other 21
+        
         for p in self.active_players:
             pp = self.active_players[p]
-
+            is_natural = (len(pp['hand']) == 2 and self.score_hand(pp['hand']) == 21)
+            
             if pp['playstate'] == 'surrender':
                 pp['current_result'] = "SURRENDER"
                 continue
+
+            if is_natural and self.score_hand(self.dealer_hand) == 21 and len(self.dealer_hand) > 2:
+                pp['current_result'] = "WIN"
             
             if self.score_hand(self.dealer_hand) > 21:
                 if pp['playstate'] == 'bust':
@@ -139,9 +147,9 @@ class BlackJackMachine:
                     pp['current_result'] = "WIN"
                 continue
             
-            
             if pp['playstate'] == 'bust':
-                pp['current_result'] = "LOSE"  
+                pp['current_result'] = "LOSE"
+            
             elif self.score_hand(pp['hand']) > self.score_hand(self.dealer_hand):
                 pp['current_result'] = "WIN"
             elif self.score_hand(pp['hand']) == self.score_hand(self.dealer_hand):
@@ -197,13 +205,17 @@ class BlackJackMachine:
         
         
     async def parse_reaction_remove(self, reaction, user):
-        pass
-        #todo: allow user to exit game. if current state is action, auto surrender
-        
+        valid = False
+        if reaction.emoji in self.cmd_reactions_remove:
+            valid = self.cmd_reactions_remove[reaction.emoji](user.id)
+        if valid:
+            self.eval_state()
+            await self.update_msg()
+            
     async def parse_reaction_add(self, reaction, user):
         print(reaction.emoji.encode("unicode_escape"), user.id)
         valid = False
-        if reaction.emoji in self.cmd_reactions_add:
+        if reaction.emoji in self.cmd_reactions_add and (reaction.emoji == "\U0001f60e" or user.id in self.active_players):
             valid = self.cmd_reactions_add[reaction.emoji](user.id)
             
         #keep join emoji
@@ -260,8 +272,10 @@ class BlackJackMachine:
         return True
         
     def cmd_leave(self, user):
-        self.active_players.pop(user)
-
+        #todo: auto surrender
+        if user in self.active_players:
+            self.active_players.pop(user)
+            return True
         
     def cmd_hit(self, user):
         if self.current_state != "player_action" or self.active_players[user]['playstate'] != 'action':
