@@ -189,7 +189,10 @@ class BlackJackMachine:
                 strhand += h + " "
             strhand += ": " + str(self.score_hand(self.dealer_hand))
         outstring = "DEALER: " + strhand + " " + self.dealer_status
-        outstring += "  [Prev. Hand: " + str(self.dealer_last_hand) + "]"
+        outstring += "[Prev.: " + str(self.dealer_last_hand) + "]"
+        fullshoe = 52 * 4
+        shoe_status = int(100 * (len(self.card_shoe)/fullshoe))
+        outstring += " [Shoe: " + str(shoe_status) + "% full]"
         return outstring
     def print_player_info(self, p):
         outstring = ""
@@ -205,7 +208,7 @@ class BlackJackMachine:
         outstring += str(p['name']) + " (" + p['playstate'] + ")\n"
         outstring += "  " + strhand + " " + p['current_result'] + "\n"
         #outstring += "  [Prev. Hand: " + str(p['last_hand']) + " " + p['previous_result'] + "]"
-        outstring += "  [Bet: " + str(p['current_bet']) + "] [Session Winnings: " + str(p['session_winnings']) + "] [Prev. Hand: " + str(p['last_hand']) + " " + p['previous_result'] + "]"
+        outstring += "  [Bet: " + str(p['current_bet']) + "] [Winnings: " + str(p['session_winnings']) + "] [Prev. Hand: " + str(p['last_hand']) + " " + p['previous_result'] + "]"
         
         return outstring
         
