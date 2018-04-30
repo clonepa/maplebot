@@ -253,6 +253,9 @@ class BlackJackMachine:
                 if self.active_players[i]['double_down']:
                     self.active_players[i]['current_bet'] = int(self.active_players[i]['current_bet'] / 2)
                     self.active_players[i]['double_down'] = False
+                if self.active_players[i]['current_bet']/100 > maple.brains.get_record(i)['cash']:
+                	self.active_players[i]['current_bet'] = max(0, int(maple.brains.get_record(i)['cash'] * 100))
+
         self.dealer_last_hand = self.score_hand(self.dealer_hand)
         self.dealer_hand = {}
         self.dealer_status = ""
@@ -278,7 +281,6 @@ class BlackJackMachine:
         return True
         
     def cmd_leave(self, user):
-        #todo: auto surrender
         if user in self.active_players:
         	if self.current_state != 'bet':
         		maple.brains.adjust_cash(user, -self.active_players[user]['current_bet']/100)
