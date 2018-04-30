@@ -164,12 +164,17 @@ class BlackJackMachine:
             bet = pp["current_bet"]
             if pp['current_result'] == "WIN":
                 pp['session_winnings'] += bet
+                maple.brains.adjust_cash(p, bet/100)
             elif pp['current_result'] == "LOSE":
                 pp['session_winnings'] -= bet
+                maple.brains.adjust_cash(p, -bet/100)
             elif pp['current_result'] == "SURRENDER":
                 pp['session_winnings'] -= int(math.ceil(bet/2))
-            
-        
+                maple.brains.adjust_cash(p, -int(math.ceil(bet/2))/100)
+
+            if pp['current_bet']/100 > maple.brains.get_record(p)['cash']:
+            	pp['current_bet'] = math.max(0, int(maple.brains.get_record(p)['cash'] * 100))
+        	
         
     def print_dealer_info(self):
         outstring = ""
@@ -199,8 +204,9 @@ class BlackJackMachine:
         
         outstring += str(p['name']) + " (" + p['playstate'] + ")\n"
         outstring += "  " + strhand + " " + p['current_result'] + "\n"
-        outstring += "  Bet: " + str(p['current_bet']) + " (Session Winnings: " + str(p['session_winnings']) + ")\n"    
-        outstring += "  Prev. Hand: " + str(p['last_hand']) + " " + p['previous_result']
+        #outstring += "  [Prev. Hand: " + str(p['last_hand']) + " " + p['previous_result'] + "]"
+        outstring += "  [Bet: " + str(p['current_bet']) + "] [Session Winnings: " + str(p['session_winnings']) + "] [Prev. Hand: " + str(p['last_hand']) + " " + p['previous_result'] + "]"
+        
         return outstring
         
         
@@ -274,8 +280,12 @@ class BlackJackMachine:
     def cmd_leave(self, user):
         #todo: auto surrender
         if user in self.active_players:
-            self.active_players.pop(user)
-            return True
+        	if self.current_state != 'bet':
+        		maple.brains.adjust_cash(user, -self.active_players[user]['current_bet']/100)
+        	elif self.current_state == 'player_action' and len(sself.active_players[user]['hand'] == 2):
+        		maple.brains.adjust_cash(user, -(self.active_players[user]['current_bet']/2)/100)
+        	self.active_players.pop(user)
+        	return True
         
     def cmd_hit(self, user):
         if self.current_state != "player_action" or self.active_players[user]['playstate'] != 'action':
@@ -324,23 +334,29 @@ class BlackJackMachine:
         if self.current_state != "bet" or self.active_players[user]['playstate'] != 'betting':
             return False
         
-        self.active_players[user]['current_bet'] += 1
+        self.active_players[user]['current_bet'] += 10
+        if self.active_players[user]['current_bet']/100 > maple.brains.get_record(user)['cash']:
+        	self.active_players[user]['current_bet'] = int(maple.brains.get_record(user)['cash'] * 100)
         return True 
         
     def cmd_inc_bet_medium(self, user):
         if self.current_state != "bet" or self.active_players[user]['playstate'] != 'betting':
             return False
         
-        self.active_players[user]['current_bet'] += 10
-            
+        self.active_players[user]['current_bet'] += 50
+        if self.active_players[user]['current_bet']/100 > maple.brains.get_record(user)['cash']:
+        	self.active_players[user]['current_bet'] = int(maple.brains.get_record(user)['cash'] * 100)
+
         return True
 
     def cmd_inc_bet_large(self, user):
         if self.current_state != "bet" or self.active_players[user]['playstate'] != 'betting':
             return False
         
-        self.active_players[user]['current_bet'] += 25
-            
+        self.active_players[user]['current_bet'] += 200
+        if self.active_players[user]['current_bet']/100 > maple.brains.get_record(user)['cash']:
+        	self.active_players[user]['current_bet'] = int(maple.brains.get_record(user)['cash'] * 100)
+
         return True
        
     def cmd_dec_bet_small(self, user):
