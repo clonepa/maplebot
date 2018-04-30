@@ -121,7 +121,7 @@ class BlackJackMachine:
         self.figure_out_who_won()
         self.settle_bets()
         await self.update_msg()
-        
+        self.current_state = "bet"
         await asyncio.sleep(3)
         
         self.reset()
