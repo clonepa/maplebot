@@ -97,6 +97,23 @@ class Debug():
         conn.close()
         await self.bot.reply('successfully populated set info for {} sets'.format(len(cardobj)))
 
+    @commands.command(pass_context=True)
+    async def populatecardinfo(self, context):
+        brains.check_debug(self, context)
+        # maplebot will time out while waiting for this to finish, so you know be careful out there
+        cardobj = brains.load_mtgjson()
+        setcount = 0
+        count = 0
+        conn = sqlite3.connect('maple.db')
+        for card_set in cardobj:
+            if "code" not in cardobj[card_set]:
+                continue
+            count += brains.load_set_json(cardobj[card_set]['code'].upper(), cardobj, conn=conn)
+            setcount += 1
+            logger.info("populated {0} cards from set #{1}".format(count, setcount))
+        conn.close()
+        await self.bot.say("added {0} cards from {1} sets".format(count, setcount))
+
 
 def setup(bot):
     bot.add_cog(Debug(bot))
