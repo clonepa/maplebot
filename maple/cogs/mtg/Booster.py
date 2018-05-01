@@ -122,21 +122,21 @@ class MTG_Boosters():
 
         await self.bot.reply(outstr)
 
-
-
-    # @commands.command(pass_context=True)
-    # @db.operation_async
-    # async def setcode(self, context, set_name: str, conn=None, cursor=None):
-    #     set_name = context.message.content.split(maxsplit=1)[1]
-    #     cursor.execute("SELECT name, code FROM set_map WHERE name LIKE :set_name",
-    #                    {"set_name": '%{0}%'.format(set_name)})
-    #     results = cursor.fetchall()
-    #     if not results:
-    #         return await self.bot.reply("no sets matchin *{0}* were found...".format(set_name))
-    #     if len(results) > 14:
-    #         return await self.bot.reply("too many matching sets!! narrow it down a little")
-    #     outstring = '\n'.join(["code for set *{0[0]}* is **{0[1]}**".format(result) for result in results])
-    #     await self.bot.reply(outstring)
+    @commands.command(pass_context=True)
+    async def setcode(self, context, set_name: str):
+        conn = sqlite3.connect('maple.db')
+        cursor = conn.cursor()
+        set_name = context.message.content.split(maxsplit=1)[1]
+        cursor.execute("SELECT name, code FROM set_map WHERE name LIKE :set_name",
+                       {"set_name": '%{0}%'.format(set_name)})
+        results = cursor.fetchall()
+        conn.close()
+        if not results:
+            return await self.bot.reply("no sets matchin *{0}* were found...".format(set_name))
+        if len(results) > 14:
+            return await self.bot.reply("too many matching sets!! narrow it down a little")
+        outstring = '\n'.join(["code for set *{0[0]}* is **{0[1]}**".format(result) for result in results])
+        await self.bot.reply(outstring)
 
 
 def setup(bot):
