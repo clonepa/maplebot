@@ -6,6 +6,11 @@ from urllib.parse import unquote
 
 from discord.ext import commands
 
+from maple import util
+
+
+logger = logging.getLogger('maple.cogs.Trivia')
+
 
 class TriviaQuestion:
     def __init__(self, difficulty=None, question_type=None, category=None, token=None):
@@ -21,7 +26,7 @@ class TriviaQuestion:
                   'token': token}
         response = requests.get('https://opentdb.com/api.php', params)
         if response.json()['response_code'] is not 0:
-            raise Exception('Non-zero response code in request to opentdb. Code: {}'.format(response['response_code']))
+            raise requests.HTTPError(response.json()['response_code'])
         resobj = response.json()['results'][0]
 
         self.type = resobj['type']
@@ -65,12 +70,12 @@ def format_answers(question):
 class MapleTrivia:
     def __init__(self, bot):
         self.bot = bot
-        self._otdb_session_token = None
+        self._oqtdb_session_token = None
         self._token_timestamp = 0
 
     def _get_otdb_token(self, force=False):
         if (time.time() - self._token_timestamp > (60 * 60 * 6) or
-            _oqtdb_session_token is None or
+            self._oqtdb_session_token is None or
             force):
             res = requests.get('https://opentdb.com/api_token.php?command=request')
             res = res.json()
@@ -81,13 +86,26 @@ class MapleTrivia:
         return self._otdb_session_token
 
     @commands.command(aliases=['trivia'], pass_context=True)
-    async def mapletrivia(self, context, difficulty=None):
+    async def mapletrivia(self, context, difficulty=None, category_id=None):
 
         def answer_check(message):
             return message.content.lower().startswith(('answer', '!answer', 'guess', '!guess'))
 
+        difficulty = None if difficulty == 'any' else difficulty
+
         await self.bot.type()
-        question = TriviaQuestion(difficulty, token=self._get_otdb_token)
+
+        token = self._get_otdb_token()
+        question = None
+        while not question:
+            try:
+                question = TriviaQuestion(difficulty, token=token, category=category_id)
+            except requests.HTTPError as exc:
+                if exc.args[0] in (3, 4):
+                    token = self._get_otdb_token(force=True)
+                else:
+                    raise exc
+
         q_reply = ("here's your question:\n" +
                    "category: *{0.category}* ({0.difficulty})\n" +
                    "***{0.question}***").format(question)
@@ -122,10 +140,25 @@ class MapleTrivia:
             await self.bot.reply('sorry, that\'s wrong... the correct answer was {}: **{}**'
                                  .format(chr(correct_index + 65), correct_answer))
 
-    @commands.command()
+    @commands.command(aliases=['triviacats'])
     async def triviacategories(self):
-        response = 
+        response = requests.get('https://opentdb.com/api_category.php')
+        categories = response.json()['trivia_categories']
 
+        half_len = -(-len(categories) // 2)
+        split = (categories[:half_len], categories[half_len:])
+
+        out_lines = ['[{id}] {name}'.format(**cat) for cat in split[0]]
+
+        max_len = len(max(out_lines, key=len))
+
+        for i, cat in enumerate(split[1]):
+            out_line = '[{id}] {name}'.format(**cat)
+            out_lines[i] = "{0:<{1}} {2}".format(out_lines[i], max_len, out_line)
+
+        out_msg = util.codeblock('\n'.join(out_lines))
+
+        await self.bot.say(out_msg)
 
 
 def setup(bot):
