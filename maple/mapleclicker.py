@@ -70,7 +70,7 @@ class ClickerMachine:
 			str_cashout = "	[CASHOUT AVAILABLE]"
 		else:
 			str_cashout = ""
-		return user_header + "\n" + "µCents: " + current_haul + str_cashout + "\n" + "total µCents mined this session: " + total_haul + ")" 
+		return user_header + "\n" + "µCents: " + current_haul + str_cashout + "\n" + "total µCents mined this session: " + total_haul 
 
 	async def update_msg(self):
 		self.update_queued = True
