@@ -47,11 +47,6 @@ class MapleCheckError(Exception):
         self.message = message
 
 
-class MapleInvalidUser(Exception):
-    def __init__(self, user):
-        self.user = user
-
-
 # --- check decorator
 
 
@@ -76,7 +71,7 @@ def get_record(target, field=None, conn=None, cursor=None):
     columns = [description[0] for description in cursor.description]
     r = cursor.fetchone()
     if not r:
-        raise MapleInvalidUser(target)
+        raise KeyError('tried to get_record for invalid user {}'.format(target))
 
     out_dict = collections.OrderedDict.fromkeys(columns)
     for i, key in enumerate(out_dict):
@@ -89,7 +84,7 @@ def get_record(target, field=None, conn=None, cursor=None):
 def set_record(target, field, value, conn=None, cursor=None):
     target_record = get_record(target)
     if field not in target_record:
-        raise KeyError(field)
+        raise KeyError('tried to set_record invalid field {}'.format(field))
     cursor.execute('''UPDATE users SET {} = :value
                    WHERE discord_id=:target OR name=:target COLLATE NOCASE'''
                    .format(field),
@@ -118,6 +113,16 @@ def adjust_cash(target, delta: float):
     new_bux = max(target_record['cash'] + delta, 0)
     response = set_record(target_record['discord_id'], 'cash', new_bux)
     return True if response == new_bux else False
+
+
+def enough_cash(user, amount):
+    '''Passed target user and set amount of money.
+    Returns 2tuple: (whether the target has enough cash,
+                     how much cash is needed.)
+    '''
+    user_cash = get_record(user, 'cash')
+    cash_needed = amount - user_cash
+    return (cash_needed <= 0, max(cash_needed, 0))
 
 
 @deco.db_operation
