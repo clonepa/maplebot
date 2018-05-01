@@ -12,6 +12,15 @@ from maple import util
 logger = logging.getLogger('maple.cogs.Trivia')
 
 
+def letter_to_emoji(letter):
+    letter = letter.upper()
+    ascii_offset = ord(letter) - 65
+    if not 0 <= ascii_offset <= 25:
+        raise ValueError('{} is not a letter of the alphabet'.format(letter))
+    code_point = 127462 + ascii_offset
+    return chr(code_point)
+
+
 class TriviaQuestion:
     def __init__(self, difficulty=None, question_type=None, category=None, token=None):
         if question_type is not None and question_type not in ('multiple', 'boolean'):
@@ -57,6 +66,56 @@ class TriviaQuestion:
         else:
             self.state = False
         return (self.state, self._correct)
+
+
+class TriviaMessage(TriviaQuestion):
+
+    def __init__(self, bot, msg, user, *args):
+        self.bot = bot
+        self.msg = msg
+        self.user = user
+        super(TriviaMessage, self).__init__(self, *args)
+
+    async def parse_reaction_add(self, reaction, user):
+        print(reaction.emoji.encode("unicode_escape"), user.id)
+        valid = False
+        if user.id == self.user:
+            valid = self.cmd_reactions_add[reaction.emoji](user.id, reaction.emoji)
+
+        if valid:
+            pass
+
+    async def parse_reaction_remove(self, reaction, user):
+        print(reaction.emoji.encode("unicode_escape"), user.id)
+        valid = False
+        if user.id == self.user:
+            valid = self.cmd_reactions_remove[reaction.emoji](user.id, reaction.emoji)
+
+        if valid:
+            pass
+
+    async def set_reactions(self, reactions_add=None, reactions_remove=None):
+        await self.bot.clear_reactions(self.msg)
+        self.cmd_reactions_add = reactions_add
+        self.cmd_reactions_remove = reactions_remove
+        emojis_to_add = set((*reactions_add.keys(), *reactions_remove.keys()))
+        for emoji in emojis_to_add:
+            await self.bot.add_reaction(self.msg, emoji)
+
+    def react_answer(self, user_id, emoji):
+        answer = ord(emoji) - 127462
+        self.answer(answer)
+        self.print_correct()
+
+    def print_correct(self):
+        if self.state is None:
+            raise Exception('TriviaMessage.print_correct() called before question was answered')
+        content = self.msg.content
+        if self.state is True:
+            content += '\nYou were right! The answer was **{}**'
+
+    async def update_msg(self):
+        await self.client.edit_message(self.msg, self.print_state())
 
 
 def format_answers(question):
