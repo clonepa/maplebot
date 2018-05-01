@@ -20,6 +20,7 @@ import deckhash
 import mapleconfig
 
 import blackjack
+from maple import brains, util_mtg  # , collection, booster
 
 TOKEN = mapleconfig.get_token()
 MTGOX_CHANNEL_ID = mapleconfig.get_mainchannel_id()
@@ -1445,4 +1446,14 @@ if __name__ == "__main__":
     commands = list(maplebot.commands.keys())[:]
     for command in commands:
         poopese(maplebot.commands[command])
+    start_cogs = ['UserManagement', 'Debug', 'Blackjack',
+                  'mtg.CardSearch', 'mtg.Collection', 'mtg.Booster']
+    maplebot.add_cog(ErrorHandling(maplebot))
+    for cog in start_cogs:
+        try:
+            maplebot.load_extension('maple.cogs.' + cog)
+            print('loaded extension {}'.format(cog))
+        except Exception as e:
+            exc = '{}: {}'.format(type(e).__name__, e)
+            print('Failed to load extension {}\n{}'.format(cog, exc))
     maplebot.run(TOKEN)

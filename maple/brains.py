@@ -280,9 +280,11 @@ def load_set_json(card_set, cardobj=None, conn=None, cursor=None):
             if card['layout'] in ('double-faced', 'split', 'aftermath'):
                 if card['name'] != card['names'][0]:
                     logger.info('{name} is of layout {layout} and is not main card {names[0]}, skipping'.format(**card))
+                    continue
             elif card['layout'] == 'meld':
                 if card['name'] == card['names'][-1]:
                     logger.info('{name} is of layout {layout} and is final card, skipping'.format(**card))
+                    continue
             # if multiverseID doesn't exist, generate fallback negative multiverse ID using mtgjson id as seed
             if 'multiverseid' in card:
                 mvid = card['multiverseid']
