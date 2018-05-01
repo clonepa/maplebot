@@ -173,8 +173,10 @@ class BlackJackMachine:
                 maple.brains.adjust_cash(p, -int(math.ceil(bet/2))/100)
 
             if pp['current_bet']/100 > maple.brains.get_record(p)['cash']:
-            	pp['current_bet'] = math.max(0, int(maple.brains.get_record(p)['cash'] * 100))
-        	
+            	pp['current_bet'] = max(0, int(maple.brains.get_record(p)['cash'] * 100))
+            result_cash = int(maple.brains.get_record(p)['cash'])
+            if result_cash < 0:
+            	maple.brains.adjust_cash(p, -result_cash)
         
     def print_dealer_info(self):
         outstring = ""
@@ -192,7 +194,7 @@ class BlackJackMachine:
         outstring += "[Prev.: " + str(self.dealer_last_hand) + "]"
         fullshoe = 52 * 4
         shoe_status = int(100 * (len(self.card_shoe)/fullshoe))
-        outstring += " [Shoe: " + str(shoe_status) + "% full]"
+        outstring += " [Shoe: " + str(shoe_status) + "%]"
         return outstring
     def print_player_info(self, p):
         outstring = ""
@@ -208,7 +210,7 @@ class BlackJackMachine:
         outstring += str(p['name']) + " (" + p['playstate'] + ")\n"
         outstring += "  " + strhand + " " + p['current_result'] + "\n"
         #outstring += "  [Prev. Hand: " + str(p['last_hand']) + " " + p['previous_result'] + "]"
-        outstring += "  [Bet: " + str(p['current_bet']) + "] [Winnings: " + str(p['session_winnings']) + "] [Prev. Hand: " + str(p['last_hand']) + " " + p['previous_result'] + "]"
+        outstring += "  [Bet: " + str(p['current_bet']) + "] [Sess. Earnings: " + str(p['session_winnings']) + "] [Prev.: " + str(p['last_hand']) + " " + p['previous_result'] + "]"
         
         return outstring
         
