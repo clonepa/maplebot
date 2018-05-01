@@ -11,10 +11,10 @@ logger = logging.getLogger('maple.debug')
 class Blackjack():
     def __init__(self, bot):
         self.bot = bot
-
+        self.reactables = []
     @commands.command(pass_context=True)
     async def bj(self, context):
-        self.reactables = []
+        
         command = context.message.content.split()[1]
         user = context.message.author.id
     
