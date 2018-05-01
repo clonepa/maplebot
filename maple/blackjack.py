@@ -173,7 +173,7 @@ class BlackJackMachine:
                 maple.brains.adjust_cash(p, -int(math.ceil(bet/2))/100)
 
             if pp['current_bet']/100 > maple.brains.get_record(p)['cash']:
-            	pp['current_bet'] = math.max(0, int(maple.brains.get_record(p)['cash'] * 100))
+            	pp['current_bet'] = max(0, int(maple.brains.get_record(p)['cash'] * 100))
         	
         
     def print_dealer_info(self):
