@@ -9,6 +9,13 @@ from maple import brains, util
 logger = logging.getLogger('maple.mtg.booster')
 
 
+def booster_price_disc(price, amount):
+    boxes = amount // 36
+    packs = amount % (boxes * 36) if boxes else amount
+    total_price = boxes * (29 * price) + packs * price
+    return (total_price, boxes)
+
+
 class MTG_Boosters():
     def __init__(self, bot):
         self.bot = bot
@@ -22,7 +29,8 @@ class MTG_Boosters():
         await self.bot.type()
         price = brains.get_booster_price(setinfo['code'])
         if price:
-            out = "{0} booster pack price: ${1}".format(setinfo['name'], price)
+            out = "{0} booster pack price: ${1}\nbooster box (36 packs) price:".format(setinfo['name'],
+                                                                                       price, price * 29)
         else:
             out = "no prices found for that set brah"
 
@@ -41,15 +49,22 @@ class MTG_Boosters():
         setinfo = brains.get_set_info(card_set)
 
         pack_price = brains.get_booster_price(setinfo['code'])
-        price = pack_price * amount
+        total_price, boxes = booster_price_disc(pack_price, amount)
 
-        if brains.get_record(user, 'cash') < price:
-            await self.bot.reply("hey idiot why don't you come back with more money")
+        has_enough, cash_needed = brains.enough_cash(user, total_price)
+        if not has_enough:
+            await self.bot.reply("hey idiot why don't you come back with ${} more".format(round(cash_needed, 2)))
             return
 
+        out = "Buy {0} {1} booster{plural} for ${2}?"
+        if boxes:
+            out += " ({}x Booster Box Discount - {} Packs (${}) Off!!)".format(boxes, 5 * boxes,
+                                                                               round(5 * boxes * pack_price, 2))
+
         self.transactions.append(user)
-        await self.bot.reply("Buy {0} {1} booster{plural} for ${2}?"
-                             .format(amount, setinfo['name'], round(price, 2), plural=("s" if amount > 1 else "")))
+        await self.bot.reply(out.format(amount,
+                                        setinfo['name'], round(total_price, 2),
+                                        plural=("s" if amount > 1 else "")))
 
         msg = await self.bot.wait_for_message(timeout=30, author=context.message.author)
         result = None
@@ -58,8 +73,11 @@ class MTG_Boosters():
                 self.transactions.remove(user)
                 return
             if msg.content.lower().startswith('y'):
-                brains.adjust_cash(user, -price)
                 result = brains.give_booster(user, card_set, amount)
+                if result == amount:
+                    brains.adjust_cash(user, -total_price)
+                else:
+                    raise Exception('failed to give boosters')
             elif msg.content.lower().startswith('n'):
                 return await self.bot.reply("well ok")
 
