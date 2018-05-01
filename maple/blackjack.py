@@ -174,7 +174,7 @@ class BlackJackMachine:
 
             if pp['current_bet']/100 > maple.brains.get_record(p)['cash']:
             	pp['current_bet'] = max(0, int(maple.brains.get_record(p)['cash'] * 100))
-            result_cash = int(maple.brains.get_record(p))
+            result_cash = int(maple.brains.get_record(p)['cash'])
             if result_cash < 0:
             	maple.brains.adjust_cash(p, -result_cash)
         
