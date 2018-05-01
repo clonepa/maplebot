@@ -13,15 +13,19 @@ class Mapleclicker():
         self.reactables = []
 
     @commands.command(pass_context=True)
-    async def bj(self, context):
+    async def maplemine(self, context):
         
         command = context.message.content.split()[1]
         user = context.message.author.id
-    
-        if command == "new":
-            pass
-        elif command == "help":
-            pass
+        
+        new_mm = mapleclicker.Mapleclicker(self.bot, self.user)
+        new_mm.msg = await self.bot.say("``` bless u ```")
+
+        for emoji in new_mm.cmd_reactions_add:
+                await self.bot.add_reaction(new_mm.msg, emoji)
+
+        reactionables += new_mm
+        
         
     async def on_reaction_add(self, reaction, user):
         if user == self.bot.user:
