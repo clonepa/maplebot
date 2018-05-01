@@ -2,6 +2,7 @@ import requests
 import random
 import logging
 import time
+import asyncio
 from urllib.parse import unquote
 
 from discord.ext import commands
@@ -21,12 +22,22 @@ def letter_to_emoji(letter):
     return chr(code_point)
 
 
+def format_answers(question, key=lambda x: x):
+    outstr = ""
+    for n, answer in enumerate(question.answers):
+        letter = key(chr(65 + n))
+        outstr += "\n**{}** {}".format(letter, answer)
+    return outstr
+
+
 class TriviaQuestion:
-    def __init__(self, difficulty=None, question_type=None, category=None, token=None):
+    def __init__(self, *, difficulty=None, question_type=None, category=None, token=None):
         if question_type is not None and question_type not in ('multiple', 'boolean'):
             raise ValueError('TriviaQuestion type must be `multiple` or `boolean`')
-        if difficulty is not None and difficulty not in ('easy', 'medium', 'hard'):
-            raise ValueError('TriviaQuestion difficulty must be one of `easy`, `medium`, `hard`')
+        if difficulty is not None and difficulty not in ('any', 'easy', 'medium', 'hard'):
+            raise ValueError('TriviaQuestion difficulty must be one of `any`, `easy`, `medium`, `hard`')
+        if difficulty == 'any':
+            difficulty = None
         params = {'amount': 1,
                   'difficulty': difficulty,
                   'type': question_type,
@@ -54,76 +65,100 @@ class TriviaQuestion:
             correct_index = answers.index(resobj['correct_answer'])
         self.answers = answers
         self._correct = correct_index
-        self.state = None
+        self._chosen = None
+
+    @property
+    def state(self):
+        if self._chosen is None:
+            return None
+        return self._chosen == self._correct
 
     def answer(self, ans):
         if self.state is not None:
             raise Exception('question was already answered')
         if not -1 < ans < len(self.answers):
             raise IndexError('answer index out of range')
-        elif ans == self._correct:
-            self.state = True
-        else:
-            self.state = False
+        self._chosen = ans
         return (self.state, self._correct)
 
 
 class TriviaMessage(TriviaQuestion):
 
-    def __init__(self, bot, msg, user, *args):
+    def __init__(self, bot, user, msg, **kwargs):
         self.bot = bot
+        self._initargs = kwargs
         self.msg = msg
         self.user = user
-        super(TriviaMessage, self).__init__(self, *args)
+        self._msg_state = "waiting"
+        super().__init__(**kwargs)
+        self._msg_state = "answering"
+        self.cmd_reactions_add = {}
+        self.cmd_reactions_remove = {}
+
+    async def init_msg(self):
+        for i in range(len(self.answers)):
+            asyncio.sleep(0.5)
+            emoji = chr(127462 + i)
+            self.cmd_reactions_add[emoji] = self.react_answer
+        await self.update_msg(refresh_reactions=True)
+        return self
 
     async def parse_reaction_add(self, reaction, user):
-        print(reaction.emoji.encode("unicode_escape"), user.id)
+        print('hell')
         valid = False
-        if user.id == self.user:
+        if user.id == self.user.id:
+            print('tits')
             valid = self.cmd_reactions_add[reaction.emoji](user.id, reaction.emoji)
-
-        if valid:
-            pass
+        else:
+            print(user.id, self.user.id, user.id == self.user.id)
+        return valid
 
     async def parse_reaction_remove(self, reaction, user):
         print(reaction.emoji.encode("unicode_escape"), user.id)
         valid = False
-        if user.id == self.user:
+        if user == self.user:
             valid = self.cmd_reactions_remove[reaction.emoji](user.id, reaction.emoji)
-
-        if valid:
-            pass
-
-    async def set_reactions(self, reactions_add=None, reactions_remove=None):
-        await self.bot.clear_reactions(self.msg)
-        self.cmd_reactions_add = reactions_add
-        self.cmd_reactions_remove = reactions_remove
-        emojis_to_add = set((*reactions_add.keys(), *reactions_remove.keys()))
-        for emoji in emojis_to_add:
-            await self.bot.add_reaction(self.msg, emoji)
+        return valid
 
     def react_answer(self, user_id, emoji):
         answer = ord(emoji) - 127462
         self.answer(answer)
-        self.print_correct()
+        self.cmd_reactions_add = {'🔁': self.new_question}
+        asyncio.ensure_future(self.update_msg(refresh_reactions=True))
+        self._msg_state = "waiting"
 
-    def print_correct(self):
+    def new_question(self, *_):
+        self.cmd_reactions_add = {}
+        super().__init__(**self._initargs)
+        asyncio.ensure_future(self.init_msg())
+
+    @property
+    def printed(self):
+        printed = ("{0.mention} here's your question:\n" +
+                   "category: *{1.category}* ({1.difficulty})\n" +
+                   "***{1.question}***").format(self.user, self)
         if self.state is None:
-            raise Exception('TriviaMessage.print_correct() called before question was answered')
-        content = self.msg.content
-        if self.state is True:
-            content += '\nYou were right! The answer was **{}**'
+            printed += format_answers(self, letter_to_emoji)
+            printed += '\nWaiting for answer...'
+        else:
+            answer_lines = format_answers(self, letter_to_emoji).splitlines()
+            answer_lines[self._chosen + 1] += " 👈"
+            answer_lines[self._correct + 1] += " ✅"
+            printed += '\n' + '\n'.join(answer_lines)
 
-    async def update_msg(self):
-        await self.client.edit_message(self.msg, self.print_state())
+        return printed
 
-
-def format_answers(question):
-    outstr = ""
-    for n, answer in enumerate(question.answers):
-        letter = chr(65 + n)
-        outstr += "\n**{}**: {}".format(letter, answer)
-    return outstr
+    async def update_msg(self, refresh_reactions=False):
+        await self.bot.edit_message(self.msg, self.printed)
+        if refresh_reactions:
+            await self.bot.clear_reactions(self.msg)
+            emojis_to_add = sorted(set((*self.cmd_reactions_add.keys(), *self.cmd_reactions_remove.keys())))
+            print(*emojis_to_add)
+            for emoji in emojis_to_add:
+                await asyncio.sleep(0.25)
+                await self.bot.add_reaction(self.msg, emoji)
+                reac = await self.bot.wait_for_reaction(emoji, user=self.bot.user, message=self.msg)
+                print(reac)
 
 
 class MapleTrivia:
@@ -131,6 +166,7 @@ class MapleTrivia:
         self.bot = bot
         self._oqtdb_session_token = None
         self._token_timestamp = 0
+        self.reactables = []
 
     def _get_otdb_token(self, force=False):
         if (time.time() - self._token_timestamp > (60 * 60 * 6) or
@@ -146,58 +182,13 @@ class MapleTrivia:
 
     @commands.command(aliases=['trivia'], pass_context=True)
     async def mapletrivia(self, context, difficulty=None, category_id=None):
-
-        def answer_check(message):
-            return message.content.lower().startswith(('answer', '!answer', 'guess', '!guess'))
-
-        difficulty = None if difficulty == 'any' else difficulty
-
         await self.bot.type()
+        msg = await self.bot.say('```...```')
 
-        token = self._get_otdb_token()
-        question = None
-        while not question:
-            try:
-                question = TriviaQuestion(difficulty, token=token, category=category_id)
-            except requests.HTTPError as exc:
-                if exc.args[0] in (3, 4):
-                    token = self._get_otdb_token(force=True)
-                else:
-                    raise exc
-
-        q_reply = ("here's your question:\n" +
-                   "category: *{0.category}* ({0.difficulty})\n" +
-                   "***{0.question}***").format(question)
-        q_reply += format_answers(question)
-        await self.bot.reply(q_reply)
-
-        answer = None
-        while answer is None:
-            answer_msg = await self.bot.wait_for_message(channel=context.message.channel,
-                                                         author=context.message.author,
-                                                         check=answer_check)
-            try:
-                answer = ord(answer_msg.content.split()[1].upper()) - 65
-            except TypeError:
-                await self.bot.reply('invalid answer! more than one character')
-            except IndexError:
-                await self.bot.reply('invalid answer!')
-            else:
-                if not 0 <= answer <= 90:
-                    await self.bot.reply('invalid answer! not a letter')
-                    answer = None
-
-        try:
-            was_correct, correct_index = question.answer(answer)
-        except IndexError:
-            await self.bot.reply('invalid answer! not an option')
-
-        correct_answer = question.answers[correct_index]
-        if was_correct:
-            await self.bot.reply('you were right, the answer was **{}**!'.format(correct_answer))
-        else:
-            await self.bot.reply('sorry, that\'s wrong... the correct answer was {}: **{}**'
-                                 .format(chr(correct_index + 65), correct_answer))
+        instance = TriviaMessage(self.bot, context.message.author, msg,
+                                 difficulty=difficulty, category=category_id)
+        self.reactables.append(instance)
+        asyncio.ensure_future(instance.init_msg())
 
     @commands.command(aliases=['triviacats'])
     async def triviacategories(self):
@@ -218,6 +209,16 @@ class MapleTrivia:
         out_msg = util.codeblock('\n'.join(out_lines))
 
         await self.bot.say(out_msg)
+
+    async def on_reaction_add(self, reaction, user):
+        print('on_reaction_add', self.reactables)
+        if user == self.bot.user:
+            return
+        for sweetbaby in self.reactables:
+            print(sweetbaby)
+            if sweetbaby.msg and (sweetbaby.msg.id == reaction.message.id):
+                print('sweet baby...', user.id)
+                await sweetbaby.parse_reaction_add(reaction, user)
 
 
 def setup(bot):
