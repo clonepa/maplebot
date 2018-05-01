@@ -87,7 +87,7 @@ class ErrorHandling():
 if __name__ == "__main__":
     os.environ['COLOREDLOGS_LOG_FORMAT'] = "%(asctime)s %(name)s %(levelname)s %(message)s"
     coloredlogs.install(level='INFO')
-    start_cogs = ['UserManagement', 'Debug', 'Blackjack',
+    start_cogs = ['UserManagement', 'Debug', 'Blackjack', 'Mapleclicker',
                   'mtg.CardSearch', 'mtg.Collection', 'mtg.Booster']
     maplebot.add_cog(ErrorHandling(maplebot))
     for cog in start_cogs:
