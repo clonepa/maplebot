@@ -172,11 +172,13 @@ class BlackJackMachine:
                 pp['session_winnings'] -= int(math.ceil(bet/2))
                 maple.brains.adjust_cash(p, -int(math.ceil(bet/2))/100)
 
+            #make sure our bet isn't more than our cash now
             if pp['current_bet']/100 > maple.brains.get_record(p)['cash']:
             	pp['current_bet'] = max(0, int(maple.brains.get_record(p)['cash'] * 100))
-            result_cash = int(maple.brains.get_record(p)['cash'])
+
+            result_cash = maple.brains.get_record(p)['cash']
             if result_cash < 0:
-            	maple.brains.adjust_cash(p, -result_cash)
+            	maple.brains.adjust_cash(p, -1 * result_cash)
         
     def print_dealer_info(self):
         outstring = ""

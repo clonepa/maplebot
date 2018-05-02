@@ -19,10 +19,17 @@ class ClickerMachine:
 		self.state = 0 #decides art
 		self.update_queued = False
 
+		self.mine_bonus = 0
+
 	def cmd_piddle(self, user):
 		cents_to_add = random.randint(0,100000)
+
+		cents_to_add = int(cents_to_add * (1 + self.mine_bonus/100))
 		self.microcents += cents_to_add
 		self.lifetime_microcents += cents_to_add
+		if random.randint(1, 39) == 39:
+			self.mine_bonus += 1
+
 		if self.update_queued == False:	
 			asyncio.ensure_future(self.update_msg())
 
@@ -70,7 +77,10 @@ class ClickerMachine:
 			str_cashout = "	[CASHOUT AVAILABLE]"
 		else:
 			str_cashout = ""
-		return user_header + "\n" + "µCents: " + current_haul + str_cashout + "\n" + "total µCents mined this session: " + total_haul 
+
+		outstring = user_header + "\n" + "µCents mined: " + current_haul + str_cashout + "\n" + "Total µCents mined this session: " + total_haul + "\n"
+		outstring += "Hole Familiarity Bonus: " + str(self.mine_bonus) + "%"
+		return outstring  
 
 	async def update_msg(self):
 		self.update_queued = True
