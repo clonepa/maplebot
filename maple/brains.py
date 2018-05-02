@@ -115,8 +115,7 @@ def verify_nick(nick, conn=None, cursor=None):
 def adjust_cash(target, delta: float):
     delta = float(delta)
     target_record = get_record(target)
-    new_bux = target_record['cash'] + delta
-    print(new_bux)
+    new_bux = max(target_record['cash'] + delta, 0)
     response = set_record(target_record['discord_id'], 'cash', new_bux)
     return True if response == new_bux else False
 
@@ -258,7 +257,13 @@ def load_mtgjson(cursor=None, conn=None):
 @deco.db_operation
 def get_set_info(set_code, conn=None, cursor=None):
     '''returns setmap values for a given setcode'''
-    set_code = set_code.upper()
+    formatted_code = set_code[-3:].upper()
+    try:
+        formatted_code = set_code[-4] + formatted_code
+    except IndexError:
+        pass
+    set_code = formatted_code
+
     cursor.execute("SELECT * FROM set_map WHERE code = :scode", {"scode": set_code})
     result = cursor.fetchone()
 
@@ -503,7 +508,6 @@ def give_homie_some_lands(who, conn=None, cursor=None):
     for i in mvid:
         cursor.execute("INSERT OR IGNORE INTO collection VALUES (:name,:mvid,60,CURRENT_TIMESTAMP)",
                        {"name": user_record['discord_id'], "mvid": i})
-        print(cursor.rowcount)
     conn.commit()
 
 
