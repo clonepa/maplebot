@@ -20,7 +20,7 @@ class Mapleclicker():
         user = context.message.author.id
         
         new_mm = mapleclicker.ClickerMachine(self.bot, user)
-        new_mm.msg = await self.bot.say("``` bless u ```")
+        new_mm.msg = await self.bot.say("``` strike the earf ```")
 
         for emoji in new_mm.cmd_reactions_add:
                 await self.bot.add_reaction(new_mm.msg, emoji)
