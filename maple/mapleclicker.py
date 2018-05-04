@@ -27,8 +27,8 @@ class ClickerMachine:
 		cents_to_add = int(cents_to_add * (1 + self.mine_bonus/100))
 		self.microcents += cents_to_add
 		self.lifetime_microcents += cents_to_add
-		if random.randint(1, 39) == 39:
-			self.mine_bonus += 1
+		if random.randint(1, 29) == 39:
+			self.mine_bonus += random.randint(1,3)
 
 		if self.update_queued == False:	
 			asyncio.ensure_future(self.update_msg())
