@@ -26,8 +26,8 @@ class UserManagement():
         else:
             cursor.execute("INSERT INTO users VALUES (?,?,1500,50.00)", (user, nickname))
             conn.commit()
-            # collection.give_homie_some_lands(user)
-            # booster.give_booster(user, "M13", 15)
+            brains.give_homie_some_lands(user)
+            brains.give_booster(user, "M13", 15)
             await self.bot.reply('created user in database with ID {0} and nickname {1}!\n'.format(user, nickname) +
                                  'i gave homie 60 of each Basic Land and 15 Magic 2013 Booster Packs!!')
         conn.close()

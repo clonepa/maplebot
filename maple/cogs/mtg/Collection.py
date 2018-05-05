@@ -1,3 +1,6 @@
+import collections
+import random
+import sqlite3
 import re
 import logging
 # import random
@@ -91,44 +94,46 @@ class MTG_Collection():
                               "\nDeckbuilder: http://qubeley.biz/mtg/deckbuilder/{0}"
                               ).format(username))
 
-    # @commands.command()
-    # @db.operation_async
-    # async def draftadd(self, target, sets, deck, conn=None, cursor=None):
-    #     brains.check_debug(self, context)
-    #     await self.bot.type()
-    #     deck = deck.strip()
-    #     deck = util_mtg.convert_deck_to_boards(deck)
-    #     deck = collections.Counter(deck[0] + deck[1])
+    @commands.command(pass_context=True)
+    async def draftadd(self, context, target, sets, deck):
+        brains.check_debug(self, context)
+        await self.bot.type()
+        deck = deck.strip()
+        deck = util_mtg.convert_deck_to_boards(deck)
+        deck = collections.Counter(deck[0] + deck[1])
 
-    #     sets = sets.split()
+        sets = sets.split()
 
-    #     target_id = brains.get_record(target, 'discord_id')
+        target_id = brains.get_record(target, 'discord_id')
 
-    #     ids_to_add = []
+        ids_to_add = []
 
-    #     logger.info('have deck with {} cards'.format(sum(deck.values())))
-    #     for card in deck:
-    #         logger.info('adding {0}x{1}'.format(card, deck[card]))
+        conn = sqlite3.connect('maple.db')
+        cursor = conn.cursor()
 
-    #         cursor.execute("SELECT multiverse_id FROM cards WHERE card_name LIKE :name AND card_set IN ({0})"
-    #                        .format(','.join(["'{}'".format(s) for s in sets])),
-    #                        {'name': card})
-    #         result = cursor.fetchall()
-    #         if not result:
-    #             print('Could not find {}'.format(card))
-    #             raise KeyError
-    #         for i in range(deck[card]):
-    #             ids_to_add.append(random.choice(result)[0])
-    #     ids_to_add = collections.Counter(ids_to_add)
-    #     logger.info('have ids_to_add with {} cards'.format(sum(ids_to_add.values())))
+        logger.info('have deck with {} cards'.format(sum(deck.values())))
+        for card in deck:
+            logger.info('adding {0}x{1}'.format(card, deck[card]))
 
-    #     logger.info('adding...')
-    #     counter = 0
-    #     for mvid in ids_to_add:
-    #         added = brains.update_collection(target_id, mvid, ids_to_add[mvid], conn)
-    #         counter += added
+            cursor.execute("SELECT multiverse_id FROM cards WHERE card_name LIKE :name AND card_set IN ({0})"
+                           .format(','.join(["'{}'".format(s) for s in sets])),
+                           {'name': card})
+            result = cursor.fetchall()
+            if not result:
+                print('Could not find {}'.format(card))
+                raise KeyError
+            for i in range(deck[card]):
+                ids_to_add.append(random.choice(result)[0])
+        ids_to_add = collections.Counter(ids_to_add)
+        logger.info('have ids_to_add with {} cards'.format(sum(ids_to_add.values())))
 
-    # await self.bot.reply('added {0} cards from sets `{1}` to collection of <@{2}>'.format(counter, sets, target_id))
+        logger.info('adding...')
+        counter = 0
+        for mvid in ids_to_add:
+            added = brains.update_collection(target_id, mvid, ids_to_add[mvid], conn=conn)
+            counter += added
+
+        await self.bot.reply('added {0} cards from sets `{1}` to collection of <@{2}>'.format(counter, sets, target_id))
 
     @commands.command(pass_context=True)
     async def hascard(self, context, target, card):
