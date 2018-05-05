@@ -66,9 +66,9 @@ class MTG_Boosters():
                                         setinfo['name'], round(total_price, 2),
                                         plural=("s" if amount > 1 else "")))
 
-        msg = await self.bot.wait_for_message(timeout=30, author=context.message.author)
         result = None
         while not result:
+            msg = await self.bot.wait_for_message(timeout=30, author=context.message.author)
             if not msg:
                 self.transactions.remove(user)
                 return
@@ -79,6 +79,7 @@ class MTG_Boosters():
                 else:
                     raise Exception('failed to give boosters')
             elif msg.content.lower().startswith('n'):
+                self.transactions.remove(user)
                 return await self.bot.reply("well ok")
 
         await self.bot.reply("{} {} booster(s) added to inventory!".format(result, setinfo['name']))

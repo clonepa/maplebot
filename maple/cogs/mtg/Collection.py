@@ -130,7 +130,7 @@ class MTG_Collection():
         logger.info('adding...')
         counter = 0
         for mvid in ids_to_add:
-            added = brains.update_collection(target_id, mvid, ids_to_add[mvid], conn)
+            added = brains.update_collection(target_id, mvid, ids_to_add[mvid], conn=conn)
             counter += added
 
         await self.bot.reply('added {0} cards from sets `{1}` to collection of <@{2}>'.format(counter, sets, target_id))
