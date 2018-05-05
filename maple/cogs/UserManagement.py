@@ -90,7 +90,7 @@ class UserManagement():
         winner_elo = winner_record['elo_rating']
         loser_elo = loser_record['elo_rating']
         new_winner_elo, new_loser_elo = util.calc_elo_change(winner_elo, loser_elo)
-        bux_adjustment = 3.00 * (new_winner_elo - winner_elo) / 32
+        bux_adjustment = 6.00 * (new_winner_elo - winner_elo) / 32
         bux_adjustment = round(bux_adjustment, 2)
         loser_bux_adjustment = round(bux_adjustment / 3, 2)
 
