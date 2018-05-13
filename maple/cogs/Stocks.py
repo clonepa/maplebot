@@ -22,10 +22,10 @@ def get_stock(symbol):
     current = soup.select('div#knowledge-finance-wholepage__entity-summary g-card-section g-card-section div span span span')[0].contents[0]
     diff = soup.select('div#knowledge-finance-wholepage__entity-summary g-card-section g-card-section div span span')[3].contents[0].strip()
     diff_pc = soup.select('div#knowledge-finance-wholepage__entity-summary g-card-section g-card-section div span span span')[2].contents[0][:-2][1:]
-    current = float(current)
-    diff = float(diff.replace('−', '-'))
+    current = float(current.replace(',',''))
+    diff = float(diff.replace('−', '-').replace(',',''))
     diff_pc = float(diff_pc.replace('−', '-'))
-    diff_sign = (diff>0) - (diff<0)
+    diff_sign = (diff > 0) - (diff < 0)
     diff_pc = diff_sign * diff_pc
     return {
         "current": round(current, 2),
@@ -50,13 +50,12 @@ def setup_db(*, conn, cursor):
 
 
 @deco.db_operation
-def get_stock_inv(user_id, symbol, *, conn, cursor):
-    symbol = symbol.upper()
-    cursor.execute('''SELECT amount FROM stocks
-                      WHERE owner_id = :user_id AND symbol = :symbol''',
-                   {"user_id": user_id, "symbol": symbol})
-    fetch = cursor.fetchone()
-    return fetch[0] if fetch else 0
+def get_stock_inv(user_id, *, conn, cursor):
+    cursor.execute('''SELECT symbol, amount FROM stocks
+                      WHERE owner_id = :user_id''',
+                   {"user_id": user_id})
+    results = cursor.fetchall()
+    return {r[0]: r[1] for r in results}
 
 
 @deco.db_operation
@@ -100,21 +99,33 @@ class MapleStocks:
         await self.bot.type()
         try:
             stock = get_stock(symbol)
-        except ValueError:
+        except KeyError:
             return await self.bot.reply('invalid symbol!')
-        except LookupError:
-            return await self.bot.reply('sorry, i only support markets that close at 4 EST for now...')
         increased = stock['diff'] > 0
         emoji = '📈' if increased else '📉'
         sign = '+' if increased else ''
         outstr = ("{0} stock: {current}¢ {1}\n{2}{diff}¢ ({2}{diff_pc}%) since closing time yesterday"
                   .format(symbol, emoji, sign, **stock))
         if brains.is_registered(context.message.author.id):
-            owned = get_stock_inv(context.message.author.id, symbol)
-            if owned:
+            try:
+                owned = get_stock_inv(context.message.author.id)[symbol]
                 outstr += "\nyou own {} (currently worth {:.2f}¢)".format(owned, owned * stock['current'])
+            except KeyError:
+                pass
         outstr = '\n' + util.codeblock(outstr)
         await self.bot.reply(outstr)
+
+    @commands.command(pass_context=True, aliases=['mystocks', 'stockinv', 'stockinventory'])
+    async def maplestockinventory(self, context):
+        await self.bot.type()
+        inventory = get_stock_inv(context.message.author.id)
+        if not inventory:
+            await self.bot.reply("you don't have any stocks!!!")
+        outstr = ""
+        for stock in inventory:
+            outstr += "\n{}x {}".format(inventory[stock], stock)
+        outstr = util.codeblock(outstr)
+        await self.bot.reply("your stocks:\n{}".format(outstr))
 
     @commands.command(pass_context=True, aliases=['buystock'])
     async def maplebuystock(self, context, symbol: util.to_upper, amount: int = 1):
@@ -127,14 +138,14 @@ class MapleStocks:
         if amount < 1:
             return await self.bot.reply("don't be silly!")
         try:
-            stock_price = (math.ceil(get_stock(symbol)['current'])) / 100
-        except ValueError:
+            stock_price = get_stock(symbol)['current']
+        except KeyError:
             return await self.bot.reply('invalid symbol!')
-        total_price = stock_price * amount
+        total_price = math.ceil(stock_price * amount) / 100
         has_enough, cash_needed = brains.enough_cash(user_id, total_price)
         if not has_enough:
             return await self.bot.reply("hey idiot why don't you come back with ${:.2f} more".format(cash_needed))
-        await self.bot.reply("buy {}x{} stock for ${:.2f}?".format(amount, symbol, total_price))
+        await self.bot.reply("buy {}x {} stock for ${:.2f}?".format(amount, symbol, total_price))
 
         self.transactions.append(user_id)
         result = None
@@ -162,17 +173,21 @@ class MapleStocks:
         user_id = context.message.author.id
         if amount < 1:
             return await self.bot.reply("don't be silly!")
-        owned = get_stock_inv(context.message.author.id, symbol)
+        try:
+            owned = get_stock_inv(context.message.author.id)[symbol]
+        except KeyError:
+            return await self.bot.reply("you don't have any of those!")
         if amount > owned:
             return await self.bot.reply("you don't have enough!")
 
+        await self.bot.type()
         try:
-            stock_price = (math.floor(get_stock(symbol)['current'])) / 100
-        except ValueError:
+            stock_price = get_stock(symbol)['current']
+        except Key:
             return await self.bot.reply('invalid symbol!')
-        total_price = stock_price * amount
+        total_price = math.floor(stock_price * amount) / 100
 
-        await self.bot.reply("sell {}x{} stock for ${:.2f}?".format(amount, symbol, total_price))
+        await self.bot.reply("sell {}x {} stock for ${:.2f}?".format(amount, symbol, total_price))
 
         self.transactions.append(user_id)
         result = None
