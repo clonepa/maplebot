@@ -1,7 +1,4 @@
-import math
-
 import requests
-from datetime import datetime, timedelta
 from .. import util, brains, deco
 
 from bs4 import BeautifulSoup as Soup
@@ -21,9 +18,9 @@ def get_stock(symbol):
         raise KeyError(symbol)
     current = soup.select('div#knowledge-finance-wholepage__entity-summary g-card-section g-card-section div span span span')[0].contents[0]
     diff = soup.select('div#knowledge-finance-wholepage__entity-summary g-card-section g-card-section div span span')[3].contents[0].strip()
-    diff_pc = soup.select('div#knowledge-finance-wholepage__entity-summary g-card-section g-card-section div span span span')[2].contents[0][:-2][1:]
-    current = float(current.replace(',',''))
-    diff = float(diff.replace('−', '-').replace(',',''))
+    diff_pc = (soup.select('div#knowledge-finance-wholepage__entity-summary g-card-section g-card-section div span span span'))[2].contents[0][:-2][1:]
+    current = float(current.replace(',', ''))
+    diff = float(diff.replace('−', '-').replace(',', ''))
     diff_pc = float(diff_pc.replace('−', '-'))
     diff_sign = (diff > 0) - (diff < 0)
     diff_pc = diff_sign * diff_pc
@@ -183,7 +180,7 @@ class MapleStocks:
         await self.bot.type()
         try:
             stock_price = get_stock(symbol)['current']
-        except Key:
+        except KeyError:
             return await self.bot.reply('invalid symbol!')
         total_price = (stock_price * amount) / 100
 
