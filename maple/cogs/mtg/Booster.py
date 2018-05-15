@@ -98,15 +98,10 @@ class MTG_Boosters():
             await self.bot.reply("\n```{0}```\nhttp://qubeley.biz/mtg/booster/{1}/{2}"
                                  .format(boosters_list[0]['cards'], card_set, boosters_list[0]['seed']))
         elif boosters_opened > 1:
-            outstring = "{0} opened {1} boosters by {2}:\n\n".format(boosters_opened,
-                                                                     card_set,
-                                                                     context.message.author.display_name)
-            for i, booster in enumerate(boosters_list):
-                outstring += "------- Booster #{0} -------\n".format(i + 1)
-                outstring += booster['cards'] + '\n'
-            pb_url = util.make_ptpb(outstring)
-            await self.bot.reply("your {1} opened {2} boosters: {3}"
-                                 .format(user, boosters_opened, card_set, pb_url))
+            out_url = ("http://qubeley.biz/mtg/boosters/{}/{}").format(
+                       card_set, ';'.join([str(booster['seed']) for booster in boosters_list]))
+            await self.bot.reply("your {} {} boosters: {}"
+                                 .format(boosters_opened, card_set, out_url))
         else:
             await self.bot.reply("don't have any of those homie!!"
                                  .format(user))
