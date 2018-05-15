@@ -1,0 +1,54 @@
+#container {
+  width: 35%;
+  margin: auto;
+}
+
+@media screen and (max-width: 1240px) {
+    #cardimage {
+        display: none !important;
+    }
+}
+
+#cardimage {
+  position: fixed;
+  right: 15px;
+  top: 50%;
+  height: 80%;
+  transform: translatey(-50%);
+}
+
+h3 {
+  font-size: 24px;
+  margin-bottom: 2px;
+  font-weight: bolder;
+}
+
+.card {
+  display: table;
+  color: white;
+  font-weight: 600;
+  text-shadow:
+    -1px -1px 0 #000,
+    1px -1px 0 #000,
+    -1px 1px 0 #000,
+    1px 1px 0 #000;
+  transition: opacity 0.5s ease-in-out;
+  cursor: pointer;
+}
+
+.card:hover {
+  opacity: 0.85;
+}
+
+.mythic_rare .rarity {
+  color: rgb(251, 82, 29);
+  text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 0 10px red;
+}
+
+.rare .rarity {
+  color: rgb(199, 174, 114);
+}
+
+.uncommon .rarity {
+  color: rgb(140, 174, 190);
+}
