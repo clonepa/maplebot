@@ -23,6 +23,19 @@ def booster_page(cset=None, seed=None):
     return render_template('booster.html', cards=cards)
 
 
+@app.route('/boosters/<cset>/<seeds>')
+def multibooster_page(cset=None, seeds=None):
+    seeds = seeds.split(';')
+    boosters = []
+    if cset:
+        for seed in seeds:
+            cards = brains.gen_booster(cset, [{"rowid": 0, "seed": int(seed)}])[0]['booster']
+            booster = [{'mvid': card[0], 'name': card[1], 'rarity': card[2],
+                        'rar_class':card[2].lower().replace(' ', '_')} for card in cards]
+            boosters.append(booster)
+    return render_template('boosters.html', boosters=boosters)
+
+
 @app.route('/deckbuilder/<user>')
 def deckbuilder(user=None):
     user_record = None
