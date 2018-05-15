@@ -141,7 +141,7 @@ class MapleStocks:
             stock_price = get_stock(symbol)['current']
         except KeyError:
             return await self.bot.reply('invalid symbol!')
-        total_price = math.ceil(stock_price * amount) / 100
+        total_price = (stock_price * amount) / 100
         has_enough, cash_needed = brains.enough_cash(user_id, total_price)
         if not has_enough:
             return await self.bot.reply("hey idiot why don't you come back with ${:.2f} more".format(cash_needed))
@@ -185,7 +185,7 @@ class MapleStocks:
             stock_price = get_stock(symbol)['current']
         except Key:
             return await self.bot.reply('invalid symbol!')
-        total_price = math.floor(stock_price * amount) / 100
+        total_price = (stock_price * amount) / 100
 
         await self.bot.reply("sell {}x {} stock for ${:.2f}?".format(amount, symbol, total_price))
 
