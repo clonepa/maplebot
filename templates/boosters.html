@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>maplebot back at it</title>
+
+	<script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+	<script src="//cdn.datatables.net/1.10.16/js/jquery.dataTables.min.js"></script>
+	<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+	<script src="/static/script/cardimage.js"></script>
+	<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.16/css/jquery.dataTables.min.css">
+	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+	<link rel="stylesheet" href="/static/styles/boosters.css">
+	<style>
+	@media (min-width: 1280px) {
+    .container{
+        max-width: 1500px;
+        width: 1500px;
+	    }
+	}
+	</style>
+</head>
+<body>
+	<img id="cardimage" src="https://i.imgur.com/tctVXhW.jpg">
+	<div id="container">
+		{% for booster in boosters%}
+		<ul class="booster">
+			<h3>Booster #{{ loop.index }}</h3>
+			{% for card in booster%}
+			<li class="card {{ card['rar_class'] }}" data-mvid="{{ card['mvid'] }}">
+			{{ card['name'] }} -- <span class="rarity">{{ card['rarity'] }}</span>
+			</li>
+			{% endfor %}
+		</ul>
+		{% endfor %}
+	</div>
+</body>
+</html>
