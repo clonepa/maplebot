@@ -164,7 +164,7 @@ class MapleStocks:
         await self.bot.type()
         inventory = get_stock_inv(context.message.author.id)
         if not inventory:
-            await self.bot.reply("you don't have any stocks!!!")
+            return await self.bot.reply("you don't have any stocks!!!")
         outstr = ""
         for stock in inventory:
             outstr += f"\n**{stock}**"
