@@ -16,7 +16,7 @@ def get_stock(symbol):
     exists = soup.find(id="knowledge-finance-wholepage__entity-summary")
     if not exists:
         raise KeyError(symbol)
-    name = soup.select('div#knowledge-finance-wholepage__entity-summary g-card-section g-card-section div div')[0].contents[0]
+    name = soup.select('div#knowledge-finance-wholepage__entity-summary g-card-section g-card-section div div .vk_bk')[0].contents[0]
     current = soup.select('div#knowledge-finance-wholepage__entity-summary g-card-section g-card-section div span span span')[0].contents[0]
     diff = soup.select('div#knowledge-finance-wholepage__entity-summary g-card-section g-card-section div span span')[3].contents[0].strip()
     diff_pc = (soup.select('div#knowledge-finance-wholepage__entity-summary g-card-section g-card-section div span span span'))[2].contents[0][:-2][1:]
@@ -43,7 +43,7 @@ def setup_db(*, conn, cursor):
     ''')
     cursor.execute('''CREATE TRIGGER IF NOT EXISTS delete_from_stocks_on_zero
                    AFTER UPDATE OF amount ON stocks BEGIN
-                   DELETE FROM stocks WHERE rowid = new.rowid AND amount = 0;
+                   DELETE FROM stocks WHERE amount = 0;
                    END''')
     conn.commit()
 
@@ -81,13 +81,16 @@ def get_stock_value(user_id, symbol, amount, *, conn, cursor):
     counter = amount
     value = 0
     values_to_take = []
+    legacy = False
     for result in results:
         if counter == 0:
             break
         if not result["price"]:
-            return None, None
+            legacy = True
+            value = None
         amt_to_take = min(counter, result["amount"])
-        value += result["price"] * amt_to_take
+        if not legacy:
+            value += result["price"] * amt_to_take
         counter -= amt_to_take
         values_to_take.append((result["price"], amt_to_take))
     if counter > 0:
@@ -161,15 +164,15 @@ class MapleStocks:
         await self.bot.type()
         inventory = get_stock_inv(context.message.author.id)
         if not inventory:
-            await self.bot.reply("you don't have any stocks!!!")
+            return await self.bot.reply("you don't have any stocks!!!")
         outstr = ""
         for stock in inventory:
             outstr += f"\n**{stock}**"
             for instance in inventory[stock]:
                 amount = instance[1]
-                value = instance[0]
-                if value is not None:
-                    total_value = amount * value
+                if instance[0] is not None:
+                    value = round(instance[0] / 100, 2)
+                    total_value = round(amount * value, 2)
                     outstr += f"\n -{amount}x bought at ${value} (total: ${total_value})"
                 else:
                     outstr += f"\n -{amount}x (legacy stock, price bought at not recorded)"
@@ -236,6 +239,7 @@ class MapleStocks:
             return await self.bot.reply('invalid symbol!')
         total_price = (stock_price * amount) / 100
         bought_at_value, values_to_take = get_stock_value(context.message.author.id, symbol, amount)
+        print(bought_at_value, values_to_take)
         profit = None
         if bought_at_value:
             bought_at_value = bought_at_value / 100
