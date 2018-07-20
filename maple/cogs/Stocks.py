@@ -45,6 +45,10 @@ def setup_db(*, conn, cursor):
                    AFTER UPDATE OF amount ON stocks BEGIN
                    DELETE FROM stocks WHERE amount = 0;
                    END''')
+				   
+	#take care of legacy stocks
+	cursor.execute("delete from stocks where rowid not in (select min(rowid) from stocks group by owner_id, symbol, price_bought)")
+	cursor.execute("update stocks set price_bought = 999999 where price_bought is null")
     conn.commit()
 
 @deco.db_operation
@@ -72,7 +76,7 @@ def get_stock_inv(user_id, *, conn, cursor):
 @deco.db_operation
 def get_stock_value(user_id, symbol, amount, *, conn, cursor):
     cursor.execute('''SELECT amount, price_bought as price FROM stocks WHERE SYMBOL = :symbol AND owner_id = :user_id ORDER BY CASE
-                   WHEN price_bought IS NULL THEN 9999999999999999999
+                   WHEN price_bought IS NULL THEN 999999999
                    ELSE price_bought
                    END ASC''',
                    {"user_id": user_id, "symbol": symbol})
