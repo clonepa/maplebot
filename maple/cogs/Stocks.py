@@ -274,7 +274,8 @@ class MapleStocks:
 
         out = f"sell {amount}x {symbol} stock for ${total_price:.2f}?"
         if profit is not None:
-            out += f"\n Profit: ${profit:.2f} (total spent: ${bought_at_value:.2f})"
+            roi = (profit/bought_at_value) * 100
+            out += f"\n Profit: ${profit:.2f}, RoI: {roi:.1f}% (total spent: ${bought_at_value:.2f})"
         else:
             out += "\nProfit could not be calculated (you have legacy stocks)"
 
