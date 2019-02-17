@@ -276,6 +276,44 @@ class MapleStocks:
         await self.bot.reply("{} {} stocks sold!".format(-result, symbol))
         self.transactions.remove(user_id)
 
+    @commands.command(pass_context=True)
+    async def mapleassets(self, context):
+        brains.check_registered(self, context)
+        user_id = context.message.author.id
+
+        cash = brains.get_record(user_id, 'cash')
+
+        errored = set()
+
+        stocks_value = 0
+        inventory = get_stock_inv(user_id)
+        for stock in inventory:
+            try:
+                stocks_value + get_stock_value(stock['symbol'])['current']
+            except KeyError:
+                errored.add(stock['symbol'])
+
+        stocks_value_in_bux = stocks_value / 100
+
+        assets_worth = cash + stocks_value_in_bux
+
+        cash_percentage = (cash / assets_worth) * 100
+        stocks_percentage = (stocks_value_in_bux / assets_worth) * 100
+        
+        output = f'''```
+The total value of your mapleassets is: ${assets_worth:.2f}
+Cash: ${cash:.2f}
+Stocks: ${stocks_value_in_bux:.2f}
+{cash_percentage:.1f}% cash, {stocks_percentage:.1f}% stocks'''
+
+        if errored:
+            output += '\n\n*Could not get stock values for symbol(s): ' + ', '.join(errored) + '. Please have it looked into.'
+        
+        output += '\n```'
+        await self.bot.reply(output)
+
+
+
 
 def setup(bot):
     bot.add_cog(MapleStocks(bot))
