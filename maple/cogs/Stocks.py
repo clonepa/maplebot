@@ -306,6 +306,7 @@ class MapleStocks:
 
     @commands.command(pass_context=True)
     async def mapleassets(self, context):
+        await self.bot.type()
         brains.check_registered(self, context)
         user_id = context.message.author.id
 
@@ -315,11 +316,17 @@ class MapleStocks:
 
         stocks_value = 0
         inventory = get_stock_inv(user_id)
-        for stock in inventory:
+        print(inventory)
+        for symbol in inventory:
+            amount = 0
+            for instance in inventory[symbol]:
+                amount += instance[1]
+            print(amount)
             try:
-                stocks_value + get_stock_value(stock['symbol'])['current']
+                stocks_value += get_stock(symbol)['current'] * amount
             except KeyError:
-                errored.add(stock['symbol'])
+                print('errored', symbol)
+                errored.add(symbol)
 
         stocks_value_in_bux = stocks_value / 100
 
@@ -330,9 +337,8 @@ class MapleStocks:
         
         output = f'''```
 The total value of your mapleassets is: ${assets_worth:.2f}
-Cash: ${cash:.2f}
-Stocks: ${stocks_value_in_bux:.2f}
-{cash_percentage:.1f}% cash, {stocks_percentage:.1f}% stocks'''
+${cash:.2f} cash/${stocks_value_in_bux:.2f} stocks
+{cash_percentage:.1f}% cash/{stocks_percentage:.1f}% stocks'''
 
         if errored:
             output += '\n\n*Could not get stock values for symbol(s): ' + ', '.join(errored) + '. Please have it looked into.'
