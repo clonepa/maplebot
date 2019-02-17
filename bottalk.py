@@ -64,4 +64,4 @@ async def make_request(client, recipient_id, code, timeout=30):
     else:
         timeout_message = '{2} bot_talk_err#{0}#TimeOut::{1}'.format(snowflake, timeout, recipient.mention)
         await client.send_message(client.get_channel(BOTTALK_CHANNELID), timeout_message)
-        return
+        raise TimeoutError
