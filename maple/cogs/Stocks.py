@@ -25,8 +25,6 @@ def get_stock(symbol):
     exists = soup.find(id="quote-header-info")
     if not exists:
         raise KeyError(symbol)
-    # TODO: NAME
-
     metadata = soup.select("#quote-header-info > div.Mt\\(15px\\) > div.Mt\\(-5px\\) > div")
 
     name = metadata[0].find_all('h1')[0].contents[0].rsplit(' (', maxsplit=1)[0]
@@ -251,6 +249,7 @@ class MapleStocks:
     async def maplesellstock(self, context, symbol: util.to_upper, amount: int = 1):
         brains.check_registered(self, context)
         user_id = context.message.author.id
+        # TODO: sell all
         if amount < 1:
             return await self.bot.reply("don't be silly!")
         try:
@@ -336,7 +335,8 @@ class MapleStocks:
         stocks_percentage = (stocks_value_in_bux / assets_worth) * 100
         
         output = f'''```
-The total value of your mapleassets is: ${assets_worth:.2f}
+Your MapleAssets
+TOTAL: ${assets_worth:.2f}
 ${cash:.2f} cash/${stocks_value_in_bux:.2f} stocks
 {cash_percentage:.1f}% cash/{stocks_percentage:.1f}% stocks'''
 
