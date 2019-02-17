@@ -159,7 +159,7 @@ class MapleStocks:
         await self.bot.reply(outstr)
 
     # TODO: adjust this for the new price column
-    @commands.command(pass_context=True, aliases=['mystocks', 'mystock', 'stockinv', 'stockinventory'])
+    @commands.command(pass_context=True, aliases=['mystocks', 'mystock', 'stockinv', 'stockinventory', 'maplestocks'])
     async def maplestockinventory(self, context):
         await self.bot.type()
         inventory = get_stock_inv(context.message.author.id)
@@ -179,7 +179,7 @@ class MapleStocks:
         outstr = util.codeblock(outstr)
         await self.bot.reply("your stocks:\n{}".format(outstr))
 
-    @commands.command(pass_context=True, aliases=['buystock'])
+    @commands.command(pass_context=True, aliases=['buystock', 'buystocks'])
     async def maplebuystock(self, context, symbol: util.to_upper, amount: int = 1):
         brains.check_registered(self, context)
         user_id = context.message.author.id
@@ -219,7 +219,7 @@ class MapleStocks:
         await self.bot.reply("{} {} stocks purchased!".format(result, symbol))
         self.transactions.remove(user_id)
 
-    @commands.command(pass_context=True, aliases=['sellstock'])
+    @commands.command(pass_context=True, aliases=['sellstock', 'sellstocks'])
     async def maplesellstock(self, context, symbol: util.to_upper, amount: int = 1):
         brains.check_registered(self, context)
         user_id = context.message.author.id
