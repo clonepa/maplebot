@@ -199,7 +199,7 @@ class MapleStocks:
                 if instance[0] is not None:
                     value = instance[0] / 100
                     total_value = amount * value
-                    outstr += f"\n -{amount}x bought at ${value} (total: ${total_value})"
+                    outstr += f"\n -{amount}x bought at ${value:.2f} (total: ${total_value:.2f})"
                 else:
                     outstr += f"\n -{amount}x (legacy stock, price bought at not recorded)"
         outstr = util.codeblock(outstr)
