@@ -53,9 +53,9 @@ def get_stock(symbol):
     return {
         "name": name,
         "currency": currency,
-        "current": round(current, 2),
-        "diff": round(diff, 2),
-        "diff_pc": round(diff_pc, 2)
+        "current": current,
+        "diff": diff,
+        "diff_pc": diff_pc,
     }
 
 
@@ -197,8 +197,8 @@ class MapleStocks:
             for instance in inventory[stock]:
                 amount = instance[1]
                 if instance[0] is not None:
-                    value = round(instance[0] / 100, 2)
-                    total_value = round(amount * value, 2)
+                    value = instance[0] / 100
+                    total_value = amount * value
                     outstr += f"\n -{amount}x bought at ${value} (total: ${total_value})"
                 else:
                     outstr += f"\n -{amount}x (legacy stock, price bought at not recorded)"
