@@ -1,8 +1,33 @@
 from flask import Flask
 from flask import render_template
+from functools import wraps
 from maple import brains
+import mapleconfig
 app = Flask(__name__)
 
+def check_auth(username, password):
+    #not doing anything with the username yet... or ever?
+    return (password in mapleconfig.get_api_keys())
+
+def authenticate():
+    return Response(
+    'come back wiht the right api key idiot', 401,
+    {'WWW-Authenticate': 'Basic realm="Login Required"'})
+
+def requires_auth(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth = request.authorization
+        if not auth or not check_auth(auth.username, auth.password):
+            return authenticate()
+        return f(*args, **kwargs)
+    return decorated
+
+@app.route('/api/users/<userid>', methods=['GET'])
+@requires_auth
+def rest_api_test:
+    return jsonify(brains.get_record(userid))
+    
 
 @app.route('/')
 @app.route('/collection/<user>')
