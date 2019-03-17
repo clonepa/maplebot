@@ -6,30 +6,56 @@ from bs4 import BeautifulSoup as Soup
 from discord.ext import commands
 
 
-URL = "https://www.google.com/search?q=stocks%3A{}&hl=en&gl=en#safe=active&hl=en&gl=en&q=%s"
+URL = "https://finance.yahoo.com/quote/{}"
 HEADERS = {'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36"}
 
+CURRENCY_RATIOS = {
+    "USD": 1,
+    "USX": 0.01
+}
+
+class UnsupportedCurrencyError(Exception):
+    def __init__(self, currency):
+        super().__init__(currency)
+        self.message = f'The currency of this stock ({currency}) is not supported. Please contact a developer to add support for it.'
 
 def get_stock(symbol):
     symbol = symbol.upper()
     soup = Soup(requests.get(URL.format(symbol), headers=HEADERS).content, 'html.parser')
-    exists = soup.find(id="knowledge-finance-wholepage__entity-summary")
+    exists = soup.find(id="quote-header-info")
     if not exists:
         raise KeyError(symbol)
-    name = soup.select('div#knowledge-finance-wholepage__entity-summary g-card-section g-card-section div div .vk_bk')[0].contents[0]
-    current = soup.select('div#knowledge-finance-wholepage__entity-summary g-card-section g-card-section div span span span')[0].contents[0]
-    diff = soup.select('div#knowledge-finance-wholepage__entity-summary g-card-section g-card-section div span span')[3].contents[0].strip()
-    diff_pc = (soup.select('div#knowledge-finance-wholepage__entity-summary g-card-section g-card-section div span span span'))[2].contents[0][:-2][1:]
+    metadata = soup.select("#quote-header-info > div.Mt\\(15px\\) > div.Mt\\(-5px\\) > div")
+
+    name = metadata[0].find_all('h1')[0].contents[0].rsplit(' (', maxsplit=1)[0]
+    currency = metadata[1].find_all('span')[0].contents[0]
+    
+    currency = currency[currency.find('Currency in') + 12:]
+
+    name += f' [{currency}]'
+
+    data = soup.select('#quote-header-info > div.My\\(6px\\) > div.D\\(ib\\) > div > span')
+    current = data[0].contents[0]
+    diff_data = data[1].contents[0]
+    diff, diff_pc = diff_data.split(' (')
     current = float(current.replace(',', ''))
     diff = float(diff.replace('−', '-').replace(',', ''))
-    diff_pc = float(diff_pc.replace('−', '-'))
+    diff_pc = float(diff_pc.replace('−', '-')[:-2])
     diff_sign = (diff > 0) - (diff < 0)
     diff_pc = diff_sign * diff_pc
+
+    try:
+        currency_ratio = CURRENCY_RATIOS[currency]
+        current *= currency_ratio
+    except KeyError as e:
+        raise UnsupportedCurrencyError(currency) from e
+
     return {
         "name": name,
-        "current": round(current, 2),
-        "diff": round(diff, 2),
-        "diff_pc": round(diff_pc, 2)
+        "currency": currency,
+        "current": current,
+        "diff": diff,
+        "diff_pc": diff_pc,
     }
 
 
@@ -159,7 +185,7 @@ class MapleStocks:
         await self.bot.reply(outstr)
 
     # TODO: adjust this for the new price column
-    @commands.command(pass_context=True, aliases=['mystocks', 'mystock', 'stockinv', 'stockinventory'])
+    @commands.command(pass_context=True, aliases=['mystocks', 'mystock', 'stockinv', 'stockinventory', 'maplestocks'])
     async def maplestockinventory(self, context):
         await self.bot.type()
         inventory = get_stock_inv(context.message.author.id)
@@ -171,15 +197,15 @@ class MapleStocks:
             for instance in inventory[stock]:
                 amount = instance[1]
                 if instance[0] is not None:
-                    value = round(instance[0] / 100, 2)
-                    total_value = round(amount * value, 2)
+                    value = instance[0] / 100
+                    total_value = amount * value
                     outstr += f"\n -{amount}x bought at ${value} (total: ${total_value})"
                 else:
                     outstr += f"\n -{amount}x (legacy stock, price bought at not recorded)"
         outstr = util.codeblock(outstr)
         await self.bot.reply("your stocks:\n{}".format(outstr))
 
-    @commands.command(pass_context=True, aliases=['buystock'])
+    @commands.command(pass_context=True, aliases=['buystock', 'buystocks'])
     async def maplebuystock(self, context, symbol: util.to_upper, amount: int = 1):
         brains.check_registered(self, context)
         user_id = context.message.author.id
@@ -219,10 +245,11 @@ class MapleStocks:
         await self.bot.reply("{} {} stocks purchased!".format(result, symbol))
         self.transactions.remove(user_id)
 
-    @commands.command(pass_context=True, aliases=['sellstock'])
+    @commands.command(pass_context=True, aliases=['sellstock', 'sellstocks'])
     async def maplesellstock(self, context, symbol: util.to_upper, amount: int = 1):
         brains.check_registered(self, context)
         user_id = context.message.author.id
+        # TODO: sell all
         if amount < 1:
             return await self.bot.reply("don't be silly!")
         try:
@@ -247,7 +274,8 @@ class MapleStocks:
 
         out = f"sell {amount}x {symbol} stock for ${total_price:.2f}?"
         if profit is not None:
-            out += f"\n Profit: ${profit:.2f} (total spent: ${bought_at_value:.2f})"
+            roi = (profit/bought_at_value) * 100
+            out += f"\n Profit: ${profit:.2f}, RoI: {roi:.1f}% (total spent: ${bought_at_value:.2f})"
         else:
             out += "\nProfit could not be calculated (you have legacy stocks)"
 
@@ -275,6 +303,51 @@ class MapleStocks:
 
         await self.bot.reply("{} {} stocks sold!".format(-result, symbol))
         self.transactions.remove(user_id)
+
+    @commands.command(pass_context=True)
+    async def mapleassets(self, context):
+        await self.bot.type()
+        brains.check_registered(self, context)
+        user_id = context.message.author.id
+
+        cash = brains.get_record(user_id, 'cash')
+
+        errored = set()
+
+        stocks_value = 0
+        inventory = get_stock_inv(user_id)
+        print(inventory)
+        for symbol in inventory:
+            amount = 0
+            for instance in inventory[symbol]:
+                amount += instance[1]
+            print(amount)
+            try:
+                stocks_value += get_stock(symbol)['current'] * amount
+            except KeyError:
+                print('errored', symbol)
+                errored.add(symbol)
+
+        stocks_value_in_bux = stocks_value / 100
+
+        assets_worth = cash + stocks_value_in_bux
+
+        cash_percentage = (cash / assets_worth) * 100
+        stocks_percentage = (stocks_value_in_bux / assets_worth) * 100
+        
+        output = f'''```
+Your MapleAssets
+TOTAL: ${assets_worth:.2f}
+${cash:.2f} cash/${stocks_value_in_bux:.2f} stocks
+{cash_percentage:.1f}% cash/{stocks_percentage:.1f}% stocks'''
+
+        if errored:
+            output += '\n\n*Could not get stock values for symbol(s): ' + ', '.join(errored) + '. Please have it looked into.'
+        
+        output += '\n```'
+        await self.bot.reply(output)
+
+
 
 
 def setup(bot):
