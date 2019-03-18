@@ -19,6 +19,11 @@ class UnsupportedCurrencyError(Exception):
         super().__init__(currency)
         self.message = f'The currency of this stock ({currency}) is not supported. Please contact a developer to add support for it.'
 
+def format_cash_delta(number):
+    sign = '' if number >= 0 else '-'
+    absolute_value = abs(number)
+    return f'{sign}${absolute_value:.2f}'
+
 def get_stock(symbol):
     symbol = symbol.upper()
     soup = Soup(requests.get(URL.format(symbol), headers=HEADERS).content, 'html.parser')
@@ -185,23 +190,45 @@ class MapleStocks:
         await self.bot.reply(outstr)
 
     # TODO: adjust this for the new price column
-    @commands.command(pass_context=True, aliases=['mystocks', 'mystock', 'stockinv', 'stockinventory', 'maplestocks'])
-    async def maplestockinventory(self, context):
+    @commands.command(pass_context=True, aliases=['mystocks', 'mystock', 'stockinv', 'stockinventory', 'maplestocks', 'checkstocks'])
+    async def maplestockinventory(self, context, mode=None):
+        profitmode = mode and mode.lower() == 'profit'
         await self.bot.type()
         inventory = get_stock_inv(context.message.author.id)
         if not inventory:
             return await self.bot.reply("you don't have any stocks!!!")
         outstr = ""
+        total_profit = 0
         for stock in inventory:
-            outstr += f"\n**{stock}**"
+            stock_total_profit = 0
+            current_value = 0
+            if profitmode:
+                data = get_stock(stock)
+                current_value = data['current']/100
+                stockinfo = '{0} [{1}] - currently valued at ${2:.2f}'.format(stock, data['name'], current_value)
+            else:
+                stockinfo = stock
+            outstr += f"\n**{stockinfo}**"
             for instance in inventory[stock]:
                 amount = instance[1]
                 if instance[0] is not None:
                     value = instance[0] / 100
                     total_value = amount * value
                     outstr += f"\n -{amount}x bought at ${value:.2f} (total: ${total_value:.2f})"
+                    if profitmode:
+                        profit = (current_value * amount) - total_value
+                        emoji = '📈' if profit >= 0 else '📉'
+                        outstr += f" -- total profit: {format_cash_delta(profit)} {emoji}"
+                        stock_total_profit = stock_total_profit + profit
                 else:
-                    outstr += f"\n -{amount}x (legacy stock, price bought at not recorded)"
+                    outstr += f"\n -{amount}x $(legacy stock, price bought at not recorded)"
+            if profitmode:
+                emoji = '📈' if stock_total_profit >= 0 else '📉'
+                outstr += f"\n total profit: {format_cash_delta(stock_total_profit)} {emoji}"
+                total_profit += stock_total_profit
+        if profitmode:
+                emoji = '📈' if total_profit >= 0 else '📉'
+                outstr += f"\n\n grand total profit: {format_cash_delta(total_profit)} {emoji}"
         outstr = util.codeblock(outstr)
         await self.bot.reply("your stocks:\n{}".format(outstr))
 
