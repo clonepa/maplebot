@@ -7,39 +7,50 @@ from discord.ext import commands
 
 
 URL = "https://finance.yahoo.com/quote/{}"
-HEADERS = {'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36"}
+HEADERS = {
+    'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36"}
 
 CURRENCY_RATIOS = {
     "USD": 1,
-    "USX": 0.01
+    "USX": 0.01,
+    "GBP": 1.30,
+    "GBX": 0.013,
+    "JPY": 0.01
 }
+
 
 class UnsupportedCurrencyError(Exception):
     def __init__(self, currency):
         super().__init__(currency)
         self.message = f'The currency of this stock ({currency}) is not supported. Please contact a developer to add support for it.'
 
+
 def format_cash_delta(number):
     sign = '' if number >= 0 else '-'
     absolute_value = abs(number)
     return f'{sign}${absolute_value:.2f}'
 
+
 def get_stock(symbol):
     symbol = symbol.upper()
-    soup = Soup(requests.get(URL.format(symbol), headers=HEADERS).content, 'html.parser')
+    soup = Soup(requests.get(URL.format(symbol),
+                             headers=HEADERS).content, 'html.parser')
     exists = soup.find(id="quote-header-info")
     if not exists:
         raise KeyError(symbol)
-    metadata = soup.select("#quote-header-info > div.Mt\\(15px\\) > div.Mt\\(-5px\\) > div")
+    metadata = soup.select(
+        "#quote-header-info > div.Mt\\(15px\\) > div.Mt\\(-5px\\) > div")
 
-    name = metadata[0].find_all('h1')[0].contents[0].rsplit(' (', maxsplit=1)[0]
+    name = metadata[0].find_all(
+        'h1')[0].contents[0].rsplit(' (', maxsplit=1)[0]
     currency = metadata[1].find_all('span')[0].contents[0]
-    
+
     currency = currency[currency.find('Currency in') + 12:]
 
     name += f' [{currency}]'
 
-    data = soup.select('#quote-header-info > div.My\\(6px\\) > div.D\\(ib\\) > div > span')
+    data = soup.select(
+        '#quote-header-info > div.My\\(6px\\) > div.D\\(ib\\) > div > span')
     current = data[0].contents[0]
     diff_data = data[1].contents[0]
     diff, diff_pc = diff_data.split(' (')
@@ -77,6 +88,7 @@ def setup_db(*, conn, cursor):
                    DELETE FROM stocks WHERE amount = 0;
                    END''')
     conn.commit()
+
 
 @deco.db_operation
 def get_stock_amounts(user_id, *, conn, cursor):
@@ -128,7 +140,6 @@ def get_stock_value(user_id, symbol, amount, *, conn, cursor):
         conn.close()
         raise ValueError("not enough of that stock!")
     return (value, values_to_take)
-
 
 
 @deco.db_operation
@@ -205,7 +216,8 @@ class MapleStocks:
             if profitmode:
                 data = get_stock(stock)
                 current_value = data['current']/100
-                stockinfo = '{0} [{1}] - currently valued at ${2:.2f}'.format(stock, data['name'], current_value)
+                stockinfo = '{0} [{1}] - currently valued at ${2:.2f}'.format(
+                    stock, data['name'], current_value)
             else:
                 stockinfo = stock
             outstr += f"\n**{stockinfo}**"
@@ -227,8 +239,8 @@ class MapleStocks:
                 outstr += f"\n total profit: {format_cash_delta(stock_total_profit)} {emoji}"
                 total_profit += stock_total_profit
         if profitmode:
-                emoji = '📈' if total_profit >= 0 else '📉'
-                outstr += f"\n\n grand total profit: {format_cash_delta(total_profit)} {emoji}"
+            emoji = '📈' if total_profit >= 0 else '📉'
+            outstr += f"\n\n grand total profit: {format_cash_delta(total_profit)} {emoji}"
         outstr = util.codeblock(outstr)
         await self.bot.reply("your stocks:\n{}".format(outstr))
 
@@ -292,7 +304,8 @@ class MapleStocks:
         except KeyError:
             return await self.bot.reply('invalid symbol!')
         total_price = (stock_price * amount) / 100
-        bought_at_value, values_to_take = get_stock_value(context.message.author.id, symbol, amount)
+        bought_at_value, values_to_take = get_stock_value(
+            context.message.author.id, symbol, amount)
         print(bought_at_value, values_to_take)
         profit = None
         if bought_at_value:
@@ -361,7 +374,7 @@ class MapleStocks:
 
         cash_percentage = (cash / assets_worth) * 100
         stocks_percentage = (stocks_value_in_bux / assets_worth) * 100
-        
+
         output = f'''```
 Your MapleAssets
 TOTAL: ${assets_worth:.2f}
@@ -369,12 +382,11 @@ ${cash:.2f} cash/${stocks_value_in_bux:.2f} stocks
 {cash_percentage:.1f}% cash/{stocks_percentage:.1f}% stocks'''
 
         if errored:
-            output += '\n\n*Could not get stock values for symbol(s): ' + ', '.join(errored) + '. Please have it looked into.'
-        
+            output += '\n\n*Could not get stock values for symbol(s): ' + ', '.join(
+                errored) + '. Please have it looked into.'
+
         output += '\n```'
         await self.bot.reply(output)
-
-
 
 
 def setup(bot):
