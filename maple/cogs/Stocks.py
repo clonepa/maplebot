@@ -203,13 +203,30 @@ class MapleStocks:
     # TODO: adjust this for the new price column
     @commands.command(pass_context=True, aliases=['mystocks', 'mystock', 'stockinv', 'stockinventory', 'maplestocks', 'checkstocks'])
     async def maplestockinventory(self, context, mode=None):
-        profitmode = mode and mode.lower() == 'profit'
+        short_profitmode = mode and mode.lower() == 'profit'
+        profitmode = mode and mode.lower() == 'profitfull'
         await self.bot.type()
         inventory = get_stock_inv(context.message.author.id)
         if not inventory:
             return await self.bot.reply("you don't have any stocks!!!")
         outstr = ""
         total_profit = 0
+        if short_profitmode:
+            grand_total_profit = 0
+            for stock in inventory:
+                data = get_stock(stock)
+                current_value = data['current']/100
+                my_total_value = sum([instance[1]*(instance[0]/100) for instance in inventory[stock] if instance[0] is not None])
+                print('my_value', my_total_value)
+                my_amount = sum([instance[1] for instance in inventory[stock] if instance[0] is not None])
+                print('my_amount', my_amount)
+                stock_total_profit = (current_value * my_amount) - my_total_value
+                emoji = '📈' if stock_total_profit >= 0 else '📉'
+                outstr += f"\n{stock} ({my_amount}x): {format_cash_delta(stock_total_profit)} {emoji}"
+                grand_total_profit += stock_total_profit
+            emoji = '📈' if grand_total_profit >= 0 else '📉'            
+            outstr += f"\n\ngrand total profit: {format_cash_delta(grand_total_profit)} {emoji}"
+            return await self.bot.reply(util.codeblock(outstr))
         for stock in inventory:
             stock_total_profit = 0
             current_value = 0
