@@ -14,6 +14,7 @@ CURRENCY_RATIOS = {
     "USD": 1,
     "USX": 0.01,
     "GBP": 1.30,
+    "GBp": 0.013,
     "GBX": 0.013,
     "JPY": 0.01
 }
